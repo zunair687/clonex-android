@@ -138,7 +138,10 @@ BPM_CATCHALL_NEW = (
     "        } catch (Throwable t) {\n"
     "            t.printStackTrace();\n"
     "            Slog.e(TAG, \"installPackageAsUserLocked failed\", t);\n"
-    "            return result.installError(\"install failed: \" + t.getClass().getSimpleName() + \": \" + t.getMessage());\n"
+    "            // No return here: installError() mutates result (success=false)\n"
+    "            // and the trailing 'return result;' must stay reachable —\n"
+    "            // returning here made it unreachable (javac error, build 45018965231).\n"
+    "            result.installError(\"install failed: \" + t.getClass().getSimpleName() + \": \" + t.getMessage());\n"
     "        } finally {\n"
     "            if (apkFile != null && option.isFlag(InstallOption.FLAG_URI_FILE)) {\n"
 )
