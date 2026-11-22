@@ -1,12 +1,12 @@
-package com.clonex.space.engine
+package com.zee.clone.engine
 
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
 import android.util.Log
-import com.clonex.space.CloneXApplication
-import com.clonex.space.data.CloneDao
-import com.clonex.space.data.CloneEntry
+import com.zee.clone.ZeeCloneApplication
+import com.zee.clone.data.CloneDao
+import com.zee.clone.data.CloneEntry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import top.niunaijun.blackbox.BlackBoxCore
@@ -14,7 +14,7 @@ import top.niunaijun.blackbox.entity.pm.InstallResult
 import java.io.File
 
 /**
- * CloneX v3.0 real virtual engine — NewBlackbox (BlackBoxCore).
+ * Zee Clone v3.0 real virtual engine — NewBlackbox (BlackBoxCore).
  *
  * Verified against the NewBlackbox sources (ALEX5402/NewBlackbox, pinned
  * commit 89b59836c66f173756a4ae258cf379a957649820, HEAD 2026-07-19):
@@ -69,7 +69,7 @@ class RealVirtualEngine(
          * by the user, so they must not appear as clones either.
          */
         val INTERNAL_PACKAGES = setOf(
-            "com.clonex.space",         // CloneX itself
+            "com.zee.clone",         // Zee Clone itself
             "com.google.android.gms",   // Google Services (Google Suite)
             "com.google.android.gsf",   // Google Services Framework
             "com.android.vending"       // Play Store (GMS registry)
@@ -77,11 +77,11 @@ class RealVirtualEngine(
     }
 
     /** Non-null reason when the engine failed to start (degraded mode). */
-    private fun engineDown(): String? = CloneXApplication.engineInitError
+    private fun engineDown(): String? = ZeeCloneApplication.engineInitError
 
     /** v2.0.1: the startup sync must not trust an empty list while down. */
     override suspend fun engineReady(): Boolean =
-        CloneXApplication.engineInitError == null
+        ZeeCloneApplication.engineInitError == null
 
     // --- install ------------------------------------------------------------
 

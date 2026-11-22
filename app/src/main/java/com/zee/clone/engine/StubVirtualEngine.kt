@@ -1,10 +1,10 @@
-package com.clonex.space.engine
+package com.zee.clone.engine
 
 import android.content.Context
 import android.content.pm.PackageManager
 import android.os.Build
-import com.clonex.space.data.CloneDao
-import com.clonex.space.data.CloneEntry
+import com.zee.clone.data.CloneDao
+import com.zee.clone.data.CloneEntry
 
 /**
  * MVP stub of the virtual engine.
@@ -57,7 +57,7 @@ class StubVirtualEngine(
                 )
             )
             EngineResult.Ok(
-                "$label saved to the CloneX library as Clone ${index + 1}. " +
+                "$label saved to the Zee Clone library as Clone ${index + 1}. " +
                     "Real virtual install needs the virtual engine — " +
                     "see ENGINE_NOTES.md."
             )
@@ -69,7 +69,7 @@ class StubVirtualEngine(
     override suspend fun launchApp(packageName: String, userId: Int): EngineResult {
         return EngineResult.NotImplemented(
             "Virtual launch is NOT implemented in this MVP. The app is in " +
-                "your CloneX library, but running it inside a virtual space " +
+                "your Zee Clone library, but running it inside a virtual space " +
                 "needs the real virtual engine (native libs), which is not " +
                 "bundled yet. See ENGINE_NOTES.md."
         )

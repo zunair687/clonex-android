@@ -1,4 +1,4 @@
-package com.clonex.space.data
+package com.zee.clone.data
 
 import android.content.Context
 import androidx.datastore.core.DataStore
@@ -12,11 +12,11 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
-    name = "clonex_settings"
+    name = "zee_clone_settings"
 )
 
 /**
- * CloneX settings, stored with Jetpack DataStore (Preferences).
+ * Zee Clone settings, stored with Jetpack DataStore (Preferences).
  * Small key/value settings only — the clone library itself is Room.
  *
  * v2.0: the app is ALREADY PRO — every feature is unlocked from the

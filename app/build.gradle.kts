@@ -38,7 +38,7 @@ val releaseStoreFile: java.io.File? =
     signingProp("CLONEX_STORE_FILE")?.let { file(it) }?.takeIf { it.exists() }
 
 android {
-    namespace = "com.clonex.space"
+    namespace = "com.zee.clone"
     compileSdk = 37
 
     // v3.0: the NewBlackbox engine ships its native lib (libblackbox.so)
@@ -47,7 +47,7 @@ android {
     ndkVersion = "27.2.12479018"
 
     defaultConfig {
-        applicationId = "com.clonex.space"
+        applicationId = "com.zee.clone"
         minSdk = 26
         // v3.0: targetSdk 28 is an ENGINE requirement — NewBlackbox
         // itself targets 28, and its hidden-API hooks rely on it.
@@ -102,7 +102,7 @@ android {
 
     // Run #31 failed on lintVitalRelease: ExpiredTargetSdkVersion —
     // Google Play requires target API 35+, but targetSdk 28 is an
-    // ENGINE requirement (see defaultConfig above) and CloneX is
+    // ENGINE requirement (see defaultConfig above) and Zee Clone is
     // sideload-only, never Play. Lint must not fail the release build
     // for this deliberate choice; other fatal lint issues still report.
     lint {

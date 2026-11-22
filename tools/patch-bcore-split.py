@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
-"""Apply the split-APK patch to a NewBlackbox checkout, for CloneX.
+"""Apply the split-APK patch to a NewBlackbox checkout, for Zee Clone.
 
 Usage: python3 tools/patch-bcore-split.py <path-to-newblackbox-checkout>
 
 - Copies the 4 patched Java files from tools/bcore-split-patch/ over the
   upstream files (they are MaxCloner's split support, Apache-2.0).
-- Adds "/data/data/com.clonex.space" to the hidden-paths list in
+- Adds "/data/data/com.zee.clone" to the hidden-paths list in
   Bcore/src/main/cpp/Utils/AntiDetection.cpp.
 - Verifies: the 4 files are byte-identical to the patch dir, and the
   AntiDetection line is present. Exits non-zero on any failure.
@@ -22,7 +22,7 @@ PATCH_FILES = {
 }
 ANTI_DETECTION = "Bcore/src/main/cpp/Utils/AntiDetection.cpp"
 ANCHOR = '    "/data/data/top.niunaijun.blackboxa",\n'
-ADD_LINE = '    "/data/data/com.clonex.space",\n'
+ADD_LINE = '    "/data/data/com.zee.clone",\n'
 
 
 def sha(p: pathlib.Path) -> str:
@@ -52,7 +52,7 @@ def main() -> int:
         text = text.replace(ANCHOR, ANCHOR + ADD_LINE, 1)
         ad.write_text(text, encoding="utf-8")
     assert ADD_LINE.strip() in ad.read_text(encoding="utf-8")
-    print(f"patched {ANTI_DETECTION} (added com.clonex.space)")
+    print(f"patched {ANTI_DETECTION} (added com.zee.clone)")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 

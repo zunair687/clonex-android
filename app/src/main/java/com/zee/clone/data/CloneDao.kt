@@ -1,4 +1,4 @@
-package com.clonex.space.data
+package com.zee.clone.data
 
 import androidx.room.Dao
 import androidx.room.Insert

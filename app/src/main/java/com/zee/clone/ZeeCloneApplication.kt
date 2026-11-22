@@ -1,4 +1,4 @@
-package com.clonex.space
+package com.zee.clone
 
 import android.app.Application
 import android.content.Context
@@ -12,7 +12,7 @@ import java.util.Date
 import java.util.Locale
 
 /**
- * CloneX v3.0 application — the NewBlackbox virtual engine
+ * Zee Clone v3.0 application — the NewBlackbox virtual engine
  * (BlackBoxCore) is initialized here:
  *
  *  - attachBaseContext: BlackBoxCore.get().doAttachBaseContext(base,
@@ -39,7 +39,7 @@ import java.util.Locale
  *    filesDir/crash-last.txt so a crash is diagnosable without logcat
  *    (Device Info shows it).
  */
-class CloneXApplication : Application() {
+class ZeeCloneApplication : Application() {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
@@ -81,11 +81,11 @@ class CloneXApplication : Application() {
                         "yyyy-MM-dd HH:mm:ss", Locale.US
                     ).format(Date())
                     val text = StringBuilder()
-                        .append("CloneX crash at $stamp\n")
+                        .append("Zee Clone crash at $stamp\n")
                         .append("Android ${Build.VERSION.RELEASE} ")
                         .append("(SDK ${Build.VERSION.SDK_INT}) ")
                         .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                        .append("CloneX 3.0.0\n")
+                        .append("Zee Clone 3.0.0\n")
                         .append(Log.getStackTraceString(throwable))
                         .toString()
                     File(filesDir, CRASH_FILE).writeText(text)
@@ -100,12 +100,12 @@ class CloneXApplication : Application() {
     }
 
     companion object {
-        private const val TAG = "CloneXApplication"
+        private const val TAG = "ZeeCloneApplication"
 
         private const val CRASH_FILE = "crash-last.txt"
 
         @Volatile
-        var instance: CloneXApplication? = null
+        var instance: ZeeCloneApplication? = null
             private set
 
         /** Non-null when the engine init threw; the app runs degraded. */

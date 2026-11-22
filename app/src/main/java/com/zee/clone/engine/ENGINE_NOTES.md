@@ -1,4 +1,4 @@
-# CloneX Engine — v3.0 notes (NewBlackbox)
+# Zee Clone Engine — v3.0 notes (NewBlackbox)
 
 ## Why v3.0 replaced v2.0
 
@@ -31,7 +31,7 @@ v3.0 switches to NewBlackbox, which is actively maintained (Android
     inside NewBlackbox: SecurityException on LocaleManager)
   - Clear cache: the clone's data/cache dir is deleted directly
     (NewBlackbox has no cache-only API)
-- `CloneXApplication` is a plain `Application`:
+- `ZeeCloneApplication` is a plain `Application`:
   `doAttachBaseContext(base, ClientConfiguration)` + `doCreate()`.
   Init runs in EVERY process of the APK.
 - Split APKs: the MaxCloner split patch is applied to the Bcore source
@@ -53,14 +53,15 @@ See `.github/workflows/build.yml`.
 ## Licence
 
 NewBlackbox is **Apache-2.0** (ALEX5402). The MaxCloner split patch
-is also Apache-2.0. CloneX source stays public with attribution —
-see README.md "Open-source attribution". No MultiApp artwork is
-copied, and the opensdk (AGPL-3.0) is no longer used at all.
+is also Apache-2.0. Zee Clone is based on CloneX source, which stays
+public with attribution — see README.md "Open-source attribution". No
+MultiApp artwork is copied, and the opensdk (AGPL-3.0) is no longer
+used at all.
 
 ## Known limits (honest, unchanged)
 
 - Banking / payment / UPI apps and apps declaring `REQUIRE_SECURE_ENV`
-  detect virtual environments and refuse or ban. CloneX will never
+  detect virtual environments and refuse or ban. Zee Clone will never
   ship a bypass for that detection.
 - Games with anti-cheat: cloning them risks an account ban.
 - Play Store / GMS inside the sandbox is fragile (the Play Store app

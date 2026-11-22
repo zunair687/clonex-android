@@ -1,8 +1,8 @@
 # Add project specific ProGuard rules here.
-# CloneX MVP: Room keeps its entities via @Entity annotations; the default
+# Zee Clone MVP: Room keeps its entities via @Entity annotations; the default
 # Android rules already cover them. Keep this file for future rules
 # (e.g. keep rules for the native virtual engine when it lands).
--keep class com.clonex.space.data.** { *; }
+-keep class com.zee.clone.data.** { *; }
 
 # v3.0: R8 (run #93) reports these library R classes as missing while
 # minifying: androidx.appcompat.resources.R$dimen and

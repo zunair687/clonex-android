@@ -19,7 +19,7 @@ What they do:
 - `BActivityThread.java` — class-loader dexPath = base + all splits; passes `nativeLibraryDir`
 
 `tools/patch-bcore-split.py` copies these 4 files into a NewBlackbox
-checkout (overwriting upstream) and adds CloneX's host package
-(`/data/data/com.clonex.space`) to the hidden-paths list in
+checkout (overwriting upstream) and adds Zee Clone's host package
+(`/data/data/com.zee.clone`) to the hidden-paths list in
 `Bcore/src/main/cpp/Utils/AntiDetection.cpp` (next to upstream's
 `top.niunaijun.blackboxa` entry), then verifies both.

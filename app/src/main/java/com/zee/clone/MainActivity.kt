@@ -1,4 +1,4 @@
-package com.clonex.space
+package com.zee.clone
 
 import android.Manifest
 import android.app.ActivityManager
@@ -82,14 +82,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.clonex.space.data.CloneDao
-import com.clonex.space.data.CloneDatabase
-import com.clonex.space.data.CloneEntry
-import com.clonex.space.data.SettingsStore
-import com.clonex.space.engine.EngineResult
-import com.clonex.space.engine.RealVirtualEngine
-import com.clonex.space.engine.VirtualEngine
-import com.clonex.space.ui.CloneXTheme
+import com.zee.clone.data.CloneDao
+import com.zee.clone.data.CloneDatabase
+import com.zee.clone.data.CloneEntry
+import com.zee.clone.data.SettingsStore
+import com.zee.clone.engine.EngineResult
+import com.zee.clone.engine.RealVirtualEngine
+import com.zee.clone.engine.VirtualEngine
+import com.zee.clone.ui.ZeeCloneTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -99,10 +99,10 @@ import java.io.File
 import java.util.concurrent.ConcurrentHashMap
 
 /**
- * CloneX v3.0 — light-mode UI, on the NewBlackbox virtual engine
- * (RealVirtualEngine / BlackBoxCore).
+ * Zee Clone v3.0 — light-mode UI, on the NewBlackbox virtual engine
+ * (RealVirtualEngine / BlackBoxCore). Based on CloneX v3.0.
  *
- *  - Home (v2.0.6): blank — only the clone grid and the blue circular
+ *  - Home (v2.0.6): blank — only the clone grid and the teal circular
  *    + FAB bottom-right. Everything else lives in the + menu.
  *  - Import Apps: its own screen — back arrow, search, "Import from file
  *    HOT section, A-Z list with a right-side alphabet index.
@@ -135,12 +135,12 @@ class MainActivity : ComponentActivity() {
         val engine: VirtualEngine = RealVirtualEngine(this, dao)
 
         setContent {
-            CloneXTheme {
+            ZeeCloneTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    CloneXApp(dao = dao, settings = settings, engine = engine, activity = this)
+                    ZeeCloneApp(dao = dao, settings = settings, engine = engine, activity = this)
                 }
             }
         }
@@ -159,7 +159,7 @@ class MainActivity : ComponentActivity() {
     ): InstallOutcome = withContext(Dispatchers.IO) {
         try {
             val fileName = "import-${System.currentTimeMillis()}.apk"
-            val dir = File(cacheDir, "clonex-imports").apply { mkdirs() }
+            val dir = File(cacheDir, "zeeclone-imports").apply { mkdirs() }
             val outFile = File(dir, fileName)
             contentResolver.openInputStream(uri)?.use { input ->
                 outFile.outputStream().use { output -> input.copyTo(output) }
@@ -207,7 +207,7 @@ class MainActivity : ComponentActivity() {
                 treeUri,
                 DocumentsContract.getTreeDocumentId(treeUri)
             )
-            val dir = File(cacheDir, "clonex-split-${System.currentTimeMillis()}")
+            val dir = File(cacheDir, "zeeclone-split-${System.currentTimeMillis()}")
                 .apply { mkdirs() }
             var copied = 0
             contentResolver.query(
@@ -302,7 +302,7 @@ class MainActivity : ComponentActivity() {
             // v2.0.3 — the engine reported success, but on the user's
             // phone v2.0.1/v2.0.2 both showed "Launching…" forever with
             // nothing opening. A clone runs in a ":pN" stub process
-            // under CloneX's own UID; if no :pN process is alive 5s
+            // under Zee Clone's own UID; if no :pN process is alive 5s
             // after a reported success, the clone's process died on
             // start (engine hooks failing on this Android version) —
             // say that plainly instead of "Launching…" forever.
@@ -415,11 +415,11 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("CloneX: 3.0.0 (targetSdk 28, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.0 (targetSdk 28, sideload-only)")
             sb.appendLine(
-                "Engine: NewBlackbox (BlackBoxCore) — ${CloneXApplication.engineStatus()}"
+                "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )
-            val lastCrash = CloneXApplication.readLastCrash(applicationContext)
+            val lastCrash = ZeeCloneApplication.readLastCrash(applicationContext)
             if (lastCrash == null) {
                 sb.appendLine("Last crash: none recorded")
             } else {
@@ -447,7 +447,7 @@ class MainActivity : ComponentActivity() {
             }
             infos.mapNotNull { info ->
                 val pkg = info.activityInfo?.packageName ?: return@mapNotNull null
-                if (pkg == packageName) return@mapNotNull null // never clone CloneX itself
+                if (pkg == packageName) return@mapNotNull null // never clone Zee Clone itself
                 val label = info.loadLabel(pm)?.toString() ?: pkg
                 pkg to label
             }.sortedBy { it.second.lowercase() }
@@ -581,7 +581,7 @@ private fun Drawable.toImageBitmap(): ImageBitmap {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun CloneXApp(
+private fun ZeeCloneApp(
     dao: CloneDao,
     settings: SettingsStore,
     engine: VirtualEngine,
@@ -608,7 +608,7 @@ private fun CloneXApp(
     var installedApps by remember { mutableStateOf<List<Pair<String, String>>?>(null) }
     val scope = rememberCoroutineScope()
 
-    // v2.0.9 — permissions: CloneX declares camera / mic / location /
+    // v2.0.9 — permissions: Zee Clone declares camera / mic / location /
     // contacts / photos in the manifest (a clone can only use what the
     // host is granted), but NEVER asks for them on its own — not at app
     // open (v2.0.7) and not when a clone is tapped (v2.0.8: the tap
@@ -648,7 +648,7 @@ private fun CloneXApp(
         status = if (granted == results.size) {
             "All ${results.size} permissions granted."
         } else {
-            "$granted of ${results.size} permissions granted. Denied ones stay off for clones — re-grant them from Settings → Grant app permissions, or system Settings → Apps → CloneX → Permissions."
+            "$granted of ${results.size} permissions granted. Denied ones stay off for clones — re-grant them from Settings → Grant app permissions, or system Settings → Apps → Zee Clone → Permissions."
         }
     }
     /** Tap a clone → launch it immediately. No permission dialogs, ever:
@@ -752,7 +752,7 @@ private fun CloneXApp(
     val onDeviceInfo: () -> Unit = { showDeviceInfo = true }
     val onSettings: () -> Unit = { showSettings = true }
     // v2.0.10 fix — Run #72 failed: the long-press dialog called
-    // onAddAnotherClone, but it only existed as CloneXHomeScreen's
+    // onAddAnotherClone, but it only existed as ZeeCloneHomeScreen's
     // parameter. One shared lambda here, used by the home screen AND
     // the long-press "Add another clone" option.
     val onAddAnotherClone: (CloneEntry) -> Unit = { entry ->
@@ -766,7 +766,7 @@ private fun CloneXApp(
     }
 
     when (screen) {
-        Screen.HOME -> CloneXHomeScreen(
+        Screen.HOME -> ZeeCloneHomeScreen(
             clones = clones,
             status = status,
             onStatusDismiss = { status = null },
@@ -890,7 +890,7 @@ private fun CloneXApp(
                         )
                     }
                     Text(
-                        "Camera, photos, location, contacts — a clone can only use what CloneX itself is granted.",
+                        "Camera, photos, location, contacts — a clone can only use what Zee Clone itself is granted.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -923,7 +923,7 @@ private fun CloneXApp(
             title = { Text("Open source licenses") },
             text = {
                 Text(
-                    "CloneX v3.0 uses the NewBlackbox virtual engine by ALEX5402 " +
+                    "Zee Clone v3.0 is based on CloneX v3.0 and uses the NewBlackbox virtual engine by ALEX5402 " +
                         "(https://github.com/ALEX5402/NewBlackbox), licensed under " +
                         "the Apache License 2.0. CloneX source code is published " +
                         "at https://github.com/XyronixDev/clonex-android. The " +
@@ -970,7 +970,7 @@ private fun CloneOptionButton(label: String, onClick: () -> Unit) {
 // ---------------------------------------------------------------------------
 
 @Composable
-private fun CloneXHomeScreen(
+private fun ZeeCloneHomeScreen(
     clones: List<CloneEntry>,
     status: String?,
     onStatusDismiss: () -> Unit,
@@ -993,7 +993,7 @@ private fun CloneXHomeScreen(
             Box {
                 FloatingActionButton(
                     onClick = { showFabMenu = true },
-                    containerColor = Color(0xFF2B5CFF),
+                    containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
                     shape = CircleShape
                 ) {
@@ -1312,7 +1312,7 @@ private fun ImportAppsScreen(
                     modifier = Modifier
                         .size(44.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(Color(0xFFE8F0FF)),
+                        .background(Color(0xFFE0F2F1)),
                     contentAlignment = Alignment.Center
                 ) {
                     Text("📁", fontSize = 22.sp)
@@ -1522,7 +1522,7 @@ private fun ImportAppRow(
         TextButton(onClick = onAdd, contentPadding = PaddingValues(0.dp)) {
             Text(
                 "+",
-                color = Color(0xFF2B5CFF),
+                color = MaterialTheme.colorScheme.primary,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )

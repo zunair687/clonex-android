@@ -1,6 +1,6 @@
-# CloneX — Virtual Space / App Cloner (v3.0)
+# Zee Clone — Virtual Space / App Cloner (v3.0, based on CloneX)
 
-**App:** CloneX · **Package:** `com.clonex.space` · **Repo:** `clonex-android`
+**App:** Zee Clone · **Package:** `com.zee.clone` · **Repo:** `zunair687/clonex-android` (fork of XyronixDev/clonex-android)
 
 Clone multiple apps, keep each clone in its own space, run them with
 separate logins — Parallel Space / Dual App style. v3.0 ships the
@@ -24,7 +24,7 @@ apps aur REQUIRE_SECURE_ENV wali apps ismein kabhi nahi chalengi.
 
 ## What v3.0 does (real)
 
-- Light-mode Compose UI: blank home (clone grid + blue + FAB), launcher-
+- Light-mode Compose UI: blank home (clone grid + teal + FAB), launcher-
   style tiles (real icon + name, no card), Import Apps screen (HOT
   section, A-Z list with a right-side alphabet index).
 - **Already PRO** — every feature unlocked from the start: up to 10
@@ -63,7 +63,7 @@ apps aur REQUIRE_SECURE_ENV wali apps ismein kabhi nahi chalengi.
 | Jetpack Compose BOM | 2026.08.00 (Compose 1.12) |
 | AGP | 9.5.0 (verified via Google Maven metadata 2026-11-06; AGP 9.1.2 does not exist) |
 | Gradle | 9.8.2 (locked spec said 9.7 — that version was never released) |
-| JDK | 21 (CloneX build); 21 (Bcore AAR build in CI, via NewBlackbox's own wrapper) |
+| JDK | 21 (Zee Clone build); 21 (Bcore AAR build in CI, via NewBlackbox's own wrapper) |
 | compileSdk / targetSdk / minSdk | 37 / **28** / 26 (targetSdk 28 is an engine requirement — sideload-only) |
 | Engine | NewBlackbox (BlackBoxCore), Apache-2.0 — AAR built in CI from pinned commit `89b59836` + MaxCloner split patch |
 | Room / DataStore / KSP | 2.7.1 / 1.1.7 / 2.3.10 |
@@ -148,9 +148,9 @@ Without the secrets the workflow still builds and uploads an
 settings.gradle.kts / build.gradle.kts / gradle/libs.versions.toml
 app/
   build.gradle.kts            # SDKs, R8, arm64 split, signing config, Bcore AAR
-  src/main/AndroidManifest.xml  # .CloneXApplication (plain Application)
-  src/main/java/com/clonex/space/
-    CloneXApplication.kt      # plain Application (BlackBoxCore init)
+  src/main/AndroidManifest.xml  # .ZeeCloneApplication (plain Application)
+  src/main/java/com/zee/clone/
+    ZeeCloneApplication.kt      # plain Application (BlackBoxCore init)
     MainActivity.kt           # single activity, light Compose UI (home /
                               # Import Apps), real icons
     ui/Theme.kt               # light Material 3 theme
@@ -161,12 +161,12 @@ app/
 tools/
   patch-bcore-split.py        # applies the MaxCloner split-APK patch to a
   bcore-split-patch/          #   NewBlackbox checkout (4 patched Java files)
-.github/workflows/build.yml  # Actions: Bcore AAR (patched), then CloneX APK
+.github/workflows/build.yml  # Actions: Bcore AAR (patched), then Zee Clone APK
 ```
 
 ## Open-source attribution (Apache-2.0)
 
-CloneX v3.0 uses the **NewBlackbox** virtual engine by ALEX5402:
+Zee Clone v3.0 is based on CloneX v3.0, which uses the **NewBlackbox** virtual engine by ALEX5402:
 
 - NewBlackbox: https://github.com/ALEX5402/NewBlackbox (pinned commit
   `89b59836c66f173756a4ae258cf379a957649820`)
@@ -177,10 +177,11 @@ Split-APK support comes from the MaxCloner fork's patch:
 - MaxCloner: https://github.com/ashiquesheriefofficial-max/MaxCloner
 - Licence: **Apache License 2.0**
 
-CloneX source code is published at
+CloneX source code (the base of Zee Clone) is published at
 https://github.com/XyronixDev/clonex-android. No MultiApp artwork is
 copied (feature icons are generic shapes). The MultiApp opensdk
-(AGPL-3.0) was used in v2.0–v2.0.10 and is no longer part of CloneX.
+(AGPL-3.0) was used in v2.0–v2.0.10 and is no longer part of CloneX
+(and therefore not part of Zee Clone).
 
 ## Next step (phone testing)
 

@@ -1,4 +1,4 @@
-package com.clonex.space.data
+package com.zee.clone.data
 
 import android.content.Context
 import androidx.room.Database
@@ -29,7 +29,7 @@ abstract class CloneDatabase : RoomDatabase() {
                 instance ?: Room.databaseBuilder(
                     context.applicationContext,
                     CloneDatabase::class.java,
-                    "clonex.db"
+                    "zeeclone.db"
                 ).addMigrations(MIGRATION_1_2).build().also { instance = it }
             }
     }

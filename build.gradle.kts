@@ -1,4 +1,4 @@
-// CloneX — root build file.
+// Zee Clone — root build file.
 // Versions are pinned in gradle/libs.versions.toml (single source of truth).
 // NOTE (run #4, AGP 9.5): AGP 9.0+ applies the Kotlin Gradle plugin
 // itself — declaring org.jetbrains.kotlin.android here (or in the app

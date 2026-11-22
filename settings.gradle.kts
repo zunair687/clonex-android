@@ -16,5 +16,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "CloneX"
+rootProject.name = "ZeeClone"
 include(":app")
