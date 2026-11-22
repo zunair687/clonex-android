@@ -42,9 +42,12 @@ STATIC_CATCH_NEW = (
 # v3.0.3: BlackBoxCore's class init calls BRUserHandle.get().myUserId()
 # (black-reflection wrapper) in a field initializer — on Android 16 that
 # reflection path fails and kills class init (ExceptionInInitializerError).
-# Use the public API instead: same value, no reflection, no class load.
+# Use the PUBLIC equivalent instead: UserHandle.getUserId(uid) is exactly
+# what myUserId() computes (uid / 100000), both APIs public since API 17.
+# NOTE: UserHandle.myUserId() itself is @hide — NOT in the public SDK, so
+# it does not compile (build 45014510065 failed on it). getUserId does.
 USERID_OLD = "    private final int mHostUserId = BRUserHandle.get().myUserId();"
-USERID_NEW = "    private final int mHostUserId = android.os.UserHandle.myUserId();"
+USERID_NEW = "    private final int mHostUserId = android.os.UserHandle.getUserId(android.os.Process.myUid());"
 USERID_IMPORT = "import black.android.os.BRUserHandle;\n"
 
 
