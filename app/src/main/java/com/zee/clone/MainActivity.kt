@@ -415,10 +415,17 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.0 (targetSdk 28, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.1 (targetSdk 28, sideload-only)")
             sb.appendLine(
                 "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )
+            val engineFailure = ZeeCloneApplication.readEngineFailure(applicationContext)
+            if (engineFailure == null) {
+                sb.appendLine("Engine init failure: none recorded")
+            } else {
+                sb.appendLine("Engine init failure:")
+                sb.appendLine(engineFailure)
+            }
             val lastCrash = ZeeCloneApplication.readLastCrash(applicationContext)
             if (lastCrash == null) {
                 sb.appendLine("Last crash: none recorded")

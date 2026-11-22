@@ -51,7 +51,7 @@ class ZeeCloneApplication : Application() {
                 }
             )
         } catch (e: Throwable) {
-            engineInitError = "attachBaseContext: ${e.message}"
+            recordEngineFailure("attachBaseContext", e)
             Log.e(TAG, "engine init failed in attachBaseContext", e)
         }
         instance = this
@@ -62,13 +62,43 @@ class ZeeCloneApplication : Application() {
         try {
             BlackBoxCore.get().doCreate()
         } catch (e: Throwable) {
-            engineInitError = "onCreate: ${e.message}"
+            recordEngineFailure("onCreate", e)
             Log.e(TAG, "engine init failed in onCreate", e)
         }
         if (engineInitError == null) {
             engineInitOk = true
         }
         installCrashHandler()
+    }
+
+    /**
+     * Record the FULL engine-init failure (type + message + whole stack
+     * trace with causes + device) to filesDir/engine-init-failure.txt,
+     * so the exact cause is readable from Device Info without logcat.
+     * The one-line banner alone cannot identify the cause: the engine
+     * swallows most failures internally, so whatever escapes doCreate()
+     * is usually an Error from native init or class loading.
+     */
+    private fun recordEngineFailure(stage: String, e: Throwable) {
+        engineInitError = "$stage: ${e.message}"
+        try {
+            val stamp = SimpleDateFormat(
+                "yyyy-MM-dd HH:mm:ss", Locale.US
+            ).format(Date())
+            val text = StringBuilder()
+                .append("Zee Clone engine init failure at $stamp\n")
+                .append("Stage: $stage\n")
+                .append("Android ${Build.VERSION.RELEASE} ")
+                .append("(SDK ${Build.VERSION.SDK_INT}) ")
+                .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
+                .append("Zee Clone 3.0.1\n")
+                .append("Exception: ${e.javaClass.name}: ${e.message}\n")
+                .append(Log.getStackTraceString(e))
+                .toString()
+            File(filesDir, ENGINE_FAILURE_FILE).writeText(text)
+        } catch (ignored: Exception) {
+            // Never let the recorder itself break startup.
+        }
     }
 
     /** Record the last uncaught crash (stack trace + device) for Device Info. */
@@ -104,6 +134,8 @@ class ZeeCloneApplication : Application() {
 
         private const val CRASH_FILE = "crash-last.txt"
 
+        private const val ENGINE_FAILURE_FILE = "engine-init-failure.txt"
+
         @Volatile
         var instance: ZeeCloneApplication? = null
             private set
@@ -124,6 +156,16 @@ class ZeeCloneApplication : Application() {
         fun readLastCrash(context: Context): String? {
             return try {
                 val file = File(context.filesDir, CRASH_FILE)
+                if (file.exists()) file.readText().trim().takeIf { it.isNotEmpty() } else null
+            } catch (e: Exception) {
+                null
+            }
+        }
+
+        /** Full recorded engine-init failure, or null when none was recorded. */
+        fun readEngineFailure(context: Context): String? {
+            return try {
+                val file = File(context.filesDir, ENGINE_FAILURE_FILE)
                 if (file.exists()) file.readText().trim().takeIf { it.isNotEmpty() } else null
             } catch (e: Exception) {
                 null
