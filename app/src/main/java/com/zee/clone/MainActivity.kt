@@ -415,7 +415,7 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.1 (targetSdk 28, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.2 (targetSdk 28, sideload-only)")
             sb.appendLine(
                 "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )

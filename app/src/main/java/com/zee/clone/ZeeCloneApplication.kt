@@ -43,6 +43,14 @@ class ZeeCloneApplication : Application() {
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
+        // Fresh failure record per launch: the first failure in this
+        // process is the root cause — later ones (e.g. the
+        // NoClassDefFoundError in onCreate after a failed class init)
+        // must not overwrite it.
+        try {
+            File(base.filesDir, ENGINE_FAILURE_FILE).delete()
+        } catch (ignored: Exception) {
+        }
         try {
             BlackBoxCore.get().doAttachBaseContext(
                 base,
@@ -80,6 +88,9 @@ class ZeeCloneApplication : Application() {
      * is usually an Error from native init or class loading.
      */
     private fun recordEngineFailure(stage: String, e: Throwable) {
+        // Keep the FIRST failure only: when class init fails, every later
+        // use throws NoClassDefFoundError and would hide the root cause.
+        if (engineInitError != null) return
         engineInitError = "$stage: ${e.message}"
         try {
             val stamp = SimpleDateFormat(
@@ -91,7 +102,7 @@ class ZeeCloneApplication : Application() {
                 .append("Android ${Build.VERSION.RELEASE} ")
                 .append("(SDK ${Build.VERSION.SDK_INT}) ")
                 .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                .append("Zee Clone 3.0.1\n")
+                .append("Zee Clone 3.0.2\n")
                 .append("Exception: ${e.javaClass.name}: ${e.message}\n")
                 .append(Log.getStackTraceString(e))
                 .toString()
@@ -115,7 +126,7 @@ class ZeeCloneApplication : Application() {
                         .append("Android ${Build.VERSION.RELEASE} ")
                         .append("(SDK ${Build.VERSION.SDK_INT}) ")
                         .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                        .append("Zee Clone 3.0.1\n")
+                        .append("Zee Clone 3.0.2\n")
                         .append(Log.getStackTraceString(throwable))
                         .toString()
                     File(filesDir, CRASH_FILE).writeText(text)

@@ -7,6 +7,10 @@ Usage: python3 tools/patch-bcore-split.py <path-to-newblackbox-checkout>
   upstream files (they are MaxCloner's split support, Apache-2.0).
 - Adds "/data/data/com.zee.clone" to the hidden-paths list in
   Bcore/src/main/cpp/Utils/AntiDetection.cpp.
+- Widens BlackBoxCore's class-load static block from catch (Exception)
+  to catch (Throwable): on Android 16 the crash-prevention installers
+  can throw Errors (hidden-API), and an Error there fails the whole
+  class init -> every later use throws NoClassDefFoundError.
 - Verifies: the 4 files are byte-identical to the patch dir, and the
   AntiDetection line is present. Exits non-zero on any failure.
 """
@@ -23,6 +27,18 @@ PATCH_FILES = {
 ANTI_DETECTION = "Bcore/src/main/cpp/Utils/AntiDetection.cpp"
 ANCHOR = '    "/data/data/top.niunaijun.blackboxa",\n'
 ADD_LINE = '    "/data/data/com.zee.clone",\n'
+
+BLACKBOX_CORE = "Bcore/src/main/java/top/niunaijun/blackbox/BlackBoxCore.java"
+STATIC_CATCH_OLD = (
+    '        } catch (Exception e) {\n'
+    '            Slog.w(TAG, "Failed to install simple crash fix or stack trace filter at class loading: " + e.getMessage());\n'
+    '        }'
+)
+STATIC_CATCH_NEW = (
+    '        } catch (Throwable e) {\n'
+    '            Slog.w(TAG, "Failed to install simple crash fix or stack trace filter at class loading: " + e.getMessage());\n'
+    '        }'
+)
 
 
 def sha(p: pathlib.Path) -> str:
@@ -53,6 +69,13 @@ def main() -> int:
         ad.write_text(text, encoding="utf-8")
     assert ADD_LINE.strip() in ad.read_text(encoding="utf-8")
     print(f"patched {ANTI_DETECTION} (added com.zee.clone)")
+    bb = nb / BLACKBOX_CORE
+    assert bb.is_file(), f"missing {BLACKBOX_CORE}"
+    text = bb.read_text(encoding="utf-8")
+    assert text.count(STATIC_CATCH_OLD) == 1, "BlackBoxCore static-block catch anchor not found exactly once"
+    bb.write_text(text.replace(STATIC_CATCH_OLD, STATIC_CATCH_NEW, 1), encoding="utf-8")
+    assert STATIC_CATCH_NEW in bb.read_text(encoding="utf-8")
+    print(f"patched {BLACKBOX_CORE} (static block catches Throwable)")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 
