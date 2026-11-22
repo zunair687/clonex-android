@@ -53,8 +53,8 @@ android {
         // itself targets 28, and its hidden-API hooks rely on it.
         // Consequence: sideload-only, never Google Play.
         targetSdk = 28
-        versionCode = 19
-        versionName = "3.0.5"
+        versionCode = 20
+        versionName = "3.0.6"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

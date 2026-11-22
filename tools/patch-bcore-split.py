@@ -216,6 +216,31 @@ BP_SIGNING_NEW = (
 )
 
 
+# v3.0.6: the AAR's consumers must keep black-reflection's generated
+# interfaces (BR* / *Static / *Context) and their @BClassNameNotProcess
+# annotations — BlackReflection.create() reads them at runtime. Without
+# these keeps the consumer's R8 pass strips the annotation (and the
+# interface methods) from all 96 generated interfaces, so every BR proxy
+# fails with "Not found @BlackClass or @BlackStrClass" (verified in Zee
+# Clone v3.0.5 APK dex: annotations_off=0, class_data_off=0 on
+# PackageParserMarshmallowStatic/Context and 23/23 sampled interfaces).
+CONSUMER_RULES = "Bcore/consumer-rules.pro"
+CONSUMER_RULES_OLD = "-keep class com.android.** {*; }\n"
+CONSUMER_RULES_NEW = (
+    "-keep class com.android.** {*; }\n"
+    "\n"
+    "# v3.0.6 (Zee Clone): keep black-reflection's generated interfaces\n"
+    "# (BR* / *Static / *Context) and their @BClassNameNotProcess\n"
+    "# annotations — BlackReflection.create() reads them at runtime.\n"
+    "-keepattributes *Annotation*\n"
+    "-keep class top.niunaijun.blackreflection.** { *; }\n"
+    "-keep @top.niunaijun.blackreflection.annotation.BClass class * { *; }\n"
+    "-keep @top.niunaijun.blackreflection.annotation.BClassName class * { *; }\n"
+    "-keep @top.niunaijun.blackreflection.annotation.BClassNameNotProcess class * { *; }\n"
+    "-keep class black.** { *; }\n"
+)
+
+
 def patch_once(path: pathlib.Path, old: str, new: str, label: str) -> None:
     text = path.read_text(encoding="utf-8")
     assert text.count(old) == 1, f"{label}: anchor not found exactly once in {path}"
@@ -275,6 +300,8 @@ def main() -> int:
     patch_once(nb / SETTINGS, PARSER_OLD, PARSER_NEW, f"{SETTINGS} (parserApk split + logging)")
     patch_once(nb / SETTINGS, SET_REINSTALL_OLD, SET_REINSTALL_NEW, f"{SETTINGS} (reInstall error shows cause)")
     patch_once(nb / BPACKAGE, BP_SIGNING_OLD, BP_SIGNING_NEW, f"{BPACKAGE} (mSigningDetails reflection fallback)")
+    # v3.0.6: R8 keep rules for black-reflection (see CONSUMER_RULES_* above).
+    patch_once(nb / CONSUMER_RULES, CONSUMER_RULES_OLD, CONSUMER_RULES_NEW, f"{CONSUMER_RULES} (black-reflection keeps)")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 

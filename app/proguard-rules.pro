@@ -23,6 +23,20 @@
 # InstallResult, ClientConfiguration) survives R8.
 -keep class top.niunaijun.blackbox.** { *; }
 -keepclassmembers class top.niunaijun.blackbox.** { *; }
+# v3.0.6: black-reflection generated interfaces (BR* / *Static / *Context)
+# carry @BClassNameNotProcess, read at runtime by BlackReflection.create().
+# Without these keeps the app's R8 pass strips the annotation (and the
+# interface methods) from all 96 generated interfaces — verified in the
+# v3.0.5 APK dex: PackageParserMarshmallowStatic/Context had
+# annotations_off=0 and class_data_off=0 — so every BR proxy fails with
+# "Not found @BlackClass or @BlackStrClass" and no clone can install.
+-keepattributes *Annotation*
+-keep class top.niunaijun.blackreflection.** { *; }
+-keep @top.niunaijun.blackreflection.annotation.BClass class * { *; }
+-keep @top.niunaijun.blackreflection.annotation.BClassName class * { *; }
+-keep @top.niunaijun.blackreflection.annotation.BClassNameNotProcess class * { *; }
+-keep class black.** { *; }
+
 # Bcore's own consumer-rules.pro also applies; repeat the key keeps here
 # so they survive even if the consumer rules are ever dropped.
 -keep class top.niunaijun.blackbox.BlackBoxCore { *; }
