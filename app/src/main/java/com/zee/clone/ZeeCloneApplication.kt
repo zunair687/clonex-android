@@ -115,7 +115,7 @@ class ZeeCloneApplication : Application() {
                         .append("Android ${Build.VERSION.RELEASE} ")
                         .append("(SDK ${Build.VERSION.SDK_INT}) ")
                         .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                        .append("Zee Clone 3.0.0\n")
+                        .append("Zee Clone 3.0.1\n")
                         .append(Log.getStackTraceString(throwable))
                         .toString()
                     File(filesDir, CRASH_FILE).writeText(text)
