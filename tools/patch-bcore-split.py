@@ -39,6 +39,13 @@ STATIC_CATCH_NEW = (
     '            Slog.w(TAG, "Failed to install simple crash fix or stack trace filter at class loading: " + e.getMessage());\n'
     '        }'
 )
+# v3.0.3: BlackBoxCore's class init calls BRUserHandle.get().myUserId()
+# (black-reflection wrapper) in a field initializer — on Android 16 that
+# reflection path fails and kills class init (ExceptionInInitializerError).
+# Use the public API instead: same value, no reflection, no class load.
+USERID_OLD = "    private final int mHostUserId = BRUserHandle.get().myUserId();"
+USERID_NEW = "    private final int mHostUserId = android.os.UserHandle.myUserId();"
+USERID_IMPORT = "import black.android.os.BRUserHandle;\n"
 
 
 def sha(p: pathlib.Path) -> str:
@@ -76,6 +83,15 @@ def main() -> int:
     bb.write_text(text.replace(STATIC_CATCH_OLD, STATIC_CATCH_NEW, 1), encoding="utf-8")
     assert STATIC_CATCH_NEW in bb.read_text(encoding="utf-8")
     print(f"patched {BLACKBOX_CORE} (static block catches Throwable)")
+    text = bb.read_text(encoding="utf-8")
+    assert text.count(USERID_OLD) == 1, "BlackBoxCore mHostUserId anchor not found exactly once"
+    text = text.replace(USERID_OLD, USERID_NEW, 1)
+    assert text.count(USERID_IMPORT) == 1, "BRUserHandle import not found exactly once"
+    text = text.replace(USERID_IMPORT, "", 1)
+    bb.write_text(text, encoding="utf-8")
+    after = bb.read_text(encoding="utf-8")
+    assert USERID_NEW in after and "BRUserHandle" not in after
+    print(f"patched {BLACKBOX_CORE} (mHostUserId via public UserHandle.myUserId)")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 

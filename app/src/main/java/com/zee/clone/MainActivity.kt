@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.widget.Toast
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
@@ -73,7 +74,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -415,7 +418,7 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.2 (targetSdk 28, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.3 (targetSdk 28, sideload-only)")
             sb.appendLine(
                 "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )
@@ -946,10 +949,20 @@ private fun ZeeCloneApp(
     }
 
     if (showDeviceInfo) {
+        val clipboardManager = LocalClipboardManager.current
+        val context = LocalContext.current
         AlertDialog(
             onDismissRequest = { showDeviceInfo = false },
             title = { Text("Device Info") },
             text = { Text(deviceInfoText ?: "Loading…") },
+            dismissButton = {
+                TextButton(onClick = {
+                    deviceInfoText?.let {
+                        clipboardManager.setText(AnnotatedString(it))
+                        Toast.makeText(context, "Copied", Toast.LENGTH_SHORT).show()
+                    }
+                }) { Text("Copy") }
+            },
             confirmButton = {
                 TextButton(onClick = { showDeviceInfo = false }) { Text("Close") }
             }
