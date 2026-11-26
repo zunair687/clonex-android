@@ -49,12 +49,16 @@ android {
     defaultConfig {
         applicationId = "com.zee.clone"
         minSdk = 26
-        // v3.0: targetSdk 28 is an ENGINE requirement — NewBlackbox
-        // itself targets 28, and its hidden-API hooks rely on it.
-        // Consequence: sideload-only, never Google Play.
-        targetSdk = 28
-        versionCode = 20
-        versionName = "3.0.6"
+        // v3.0.7 (2026-11-26, user order: Play Store release, must run on
+        // EVERY phone): targetSdk raised 28 → 35 — Play rejects anything
+        // below 35 for new apps. RISK, stated honestly: NewBlackbox was
+        // built for 28 and its hidden-API hooks may not survive 35; the
+        // build must be installed and clone-tested on a real phone before
+        // any Play listing. If the engine breaks at 35, the fallback is
+        // sideload-only at 28.
+        targetSdk = 35
+        versionCode = 21
+        versionName = "3.0.7"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -118,15 +122,18 @@ android {
         compose = true
     }
 
-    // Small-size goal: arm64 only. A 32-bit + 64-bit universal build would
-    // roughly double the native payload; 32-bit-only devices are out of
-    // scope for this MVP (see README).
+    // v3.0.7 (2026-11-26, user order: Play Store, every phone): UNIVERSAL
+    // APK — arm64-v8a + armeabi-v7a both inside. v3.0.6 was arm64-only and
+    // would not even install on 32-bit phones (diagnosed 2026-11-26).
+    // Play's 64-bit rule is satisfied (arm64 present); the 32-bit slice
+    // keeps older/cheaper phones working. (For the Play listing itself an
+    // AAB is needed later — bundleRelease, not an APK.)
     splits {
         abi {
             isEnable = true
             reset()
-            include("arm64-v8a")
-            isUniversalApk = false
+            include("arm64-v8a", "armeabi-v7a")
+            isUniversalApk = true
         }
     }
 
