@@ -86,13 +86,18 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zee.clone.data.CloneDao
 import com.zee.clone.data.CloneDatabase
 import com.zee.clone.data.CloneEntry
+import com.zee.clone.data.IdentitySettings
+import com.zee.clone.data.ProxyHealth
 import com.zee.clone.data.ProxySettings
 import com.zee.clone.data.SettingsStore
 import com.zee.clone.engine.EngineResult
+import com.zee.clone.engine.FakeLocationBridge
 import com.zee.clone.engine.RealVirtualEngine
 import com.zee.clone.engine.VirtualEngine
 import com.zee.clone.ui.ProxyDialog
@@ -448,6 +453,23 @@ class MainActivity : ComponentActivity() {
 
     internal suspend fun launchClone(entry: CloneEntry, engine: VirtualEngine): InstallOutcome {
         return try {
+            // v3.1.1: re-apply the clone's GPS (engine fake location) on
+            // every launch — the engine's fake-location state is
+            // server-side and can be lost when the engine restarts. The
+            // bind-time identity (timezone / locale / Android ID) is
+            // applied by ZeeIdentity inside the clone process. Fail-soft:
+            // a GPS failure never blocks the launch, it is just reported.
+            var gpsNote = ""
+            val ident = IdentitySettings.read(applicationContext, entry.packageName, entry.userId)
+            if (ident != null) {
+                val gps = withContext(Dispatchers.IO) {
+                    FakeLocationBridge.apply(
+                        entry.packageName, entry.userId,
+                        ident.lat, ident.lng, ident.gpsEnabled
+                    )
+                }
+                if (!gps.ok) gpsNote = " (GPS: ${gps.message})"
+            }
             // v2.0.9 — the engine's IPC calls can block forever when its
             // server is unresponsive (v2.0.8: second tap stuck on
             // "Launching Instagram…" for 20s+). Bound it: 15s, then a
@@ -468,7 +490,7 @@ class MainActivity : ComponentActivity() {
             // say that plainly instead of "Launching…" forever.
             delay(5000)
             if (isAgentProcessAlive()) {
-                InstallOutcome(messageOf(result))
+                InstallOutcome(messageOf(result) + gpsNote)
             } else {
                 InstallOutcome(
                     "Clone could not start — its process did not stay alive. " +
@@ -583,7 +605,7 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.9 (targetSdk 35, sideload-only)")
+            sb.appendLine("Zee Clone: 3.1.1 (targetSdk 35, sideload-only)")
             val app = ZeeCloneApplication.instance
             sb.appendLine(
                 "Engine profile: ${app?.engineProfile ?: Boot.currentProfile(applicationContext.filesDir)}"
@@ -615,6 +637,63 @@ class MainActivity : ComponentActivity() {
             sb.appendLine()
             sb.appendLine("Device details:")
             sb.appendLine(Boot.deviceReport())
+            sb.appendLine()
+            sb.appendLine("Clones — proxy + identity (v3.1.1):")
+            try {
+                val entries = CloneDatabase.get(applicationContext).cloneDao().getAllOnce()
+                if (entries.isEmpty()) {
+                    sb.appendLine("(no clones yet)")
+                }
+                for (entry in entries) {
+                    sb.appendLine("- ${entry.label} (Clone ${entry.cloneIndex + 1}, ${entry.packageName}, user ${entry.userId}):")
+                    val proxy = ProxySettings.read(applicationContext, entry.packageName, entry.userId)
+                    if (proxy == null) {
+                        sb.appendLine("  proxy: not configured")
+                    } else if (!proxy.enabled) {
+                        sb.appendLine("  proxy: disabled")
+                    } else {
+                        val active = proxy.activeEndpoint()
+                        val health = ProxyHealth.readFor(applicationContext, entry.packageName, entry.userId, active)
+                        val healthText = when {
+                            health == null -> "not tested yet"
+                            health.alive -> "ALIVE, exit ${health.exitIp} (${health.country})"
+                            else -> "DEAD: ${health.reason}"
+                        }
+                        sb.appendLine("  proxy: ${active.type} ${active.host}:${active.port} (${active.country.ifBlank { "no country" }}) — health: $healthText")
+                        if (proxy.alternates.isNotEmpty()) {
+                            sb.appendLine("  alternates: ${proxy.alternates.size} (${proxy.alternates.joinToString { "${it.host}:${it.port}" }})")
+                        }
+                    }
+                    val proxyStatus = ProxySettings.readStatus(applicationContext, entry.packageName, entry.userId)
+                    if (proxyStatus != null) {
+                        sb.appendLine("  proxy hook status: ${proxyStatus.replace("\n", " | ")}")
+                    }
+                    val identity = IdentitySettings.read(applicationContext, entry.packageName, entry.userId)
+                    if (identity == null) {
+                        sb.appendLine("  identity: not configured (host timezone/locale/GPS/ID)")
+                    } else {
+                        sb.appendLine(
+                            "  identity: tz=${identity.timezone.ifBlank { "(host)" }} " +
+                                "locale=${identity.locale.ifBlank { "(host)" }} " +
+                                "gps=${if (identity.gpsEnabled) "${identity.lat},${identity.lng}" else "off"} " +
+                                "androidId=${identity.androidId.ifBlank { "(real ID)" }}"
+                        )
+                    }
+                    val identityStatus = IdentitySettings.readStatus(applicationContext, entry.packageName, entry.userId)
+                    if (identityStatus != null) {
+                        sb.appendLine("  identity apply status: ${identityStatus.replace("\n", " | ")}")
+                    }
+                }
+            } catch (e: Exception) {
+                sb.appendLine("(could not list clones: ${e.message})")
+            }
+            sb.appendLine()
+            sb.appendLine("Device IDs the engine already separates per clone (no app work needed):")
+            sb.appendLine("  Advertising ID: engine hook (VirtualAdvertisingIdService) — distinct per clone.")
+            sb.appendLine("  App Set ID: distinct naturally (GMS data is isolated per clone).")
+            sb.appendLine("  Build serial / IMEI: not readable by normal apps on Android 10+")
+            sb.appendLine("  (SecurityException without READ_PRIVILEGED_PHONE_STATE).")
+            sb.appendLine("  Build model/fingerprint: the REAL phone for every clone (consistent).")
             sb.toString().trim()
         }
 
@@ -861,6 +940,29 @@ private fun ZeeCloneApp(
         initialValue = false
     )
 
+    // v3.1.1: periodic proxy health re-check while Zee Clone is open.
+    // Every 15 min (only while the app is resumed) each configured proxy
+    // is re-tested and its health file updated; a dead proxy shows as a
+    // warning in the clone menu, the Proxy dialog and Device Info. No
+    // background service: when the app is closed, health is re-checked
+    // on the next open / dialog / Device Info load instead.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    LaunchedEffect(Unit) {
+        while (true) {
+            delay(15 * 60 * 1000)
+            if (lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED)) {
+                withContext(Dispatchers.IO) {
+                    for (entry in dao.getAllOnce()) {
+                        val ps = ProxySettings.read(activity, entry.packageName, entry.userId)
+                        if (ps?.enabled == true && ps.host.isNotBlank() && ps.port in 1..65535) {
+                            ProxyHealth.testEndpoint(activity, entry.packageName, entry.userId, ps.activeEndpoint())
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     var screen by remember { mutableStateOf(Screen.HOME) }
     var status by remember { mutableStateOf<String?>(null) }
     var cloneOptions by remember { mutableStateOf<CloneEntry?>(null) }
@@ -1073,11 +1175,15 @@ private fun ZeeCloneApp(
 
     cloneOptions?.let { entry ->
         // v3.1.0: show the configured proxy country on the button, if any.
+        // v3.1.1: append a DEAD warning when the last health check failed.
         val proxyLabel = remember(entry) {
-            ProxySettings.read(activity, entry.packageName, entry.userId)
+            val ps = ProxySettings.read(activity, entry.packageName, entry.userId)
                 ?.takeIf { it.enabled }
-                ?.let { "Proxy… (${it.country.ifBlank { it.type }})" }
-                ?: "Proxy…"
+            val base = ps?.let { "Proxy… (${it.country.ifBlank { it.type }})" } ?: "Proxy…"
+            val dead = ps?.let {
+                ProxyHealth.readFor(activity, entry.packageName, entry.userId, it.activeEndpoint())
+            }?.takeIf { !it.alive }
+            if (dead != null) "$base ⚠ DEAD" else base
         }
         AlertDialog(
             onDismissRequest = { cloneOptions = null },

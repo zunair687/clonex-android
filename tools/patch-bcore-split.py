@@ -245,6 +245,14 @@ CONSUMER_RULES_NEW = (
 )
 
 
+# --- v3.1.1: per-clone identity (ZeeIdentity) --------------------------------
+# New Java file, applied inside the clone process at bind time (see
+# tools/bcore-split-patch/ZeeIdentity.java): timezone/locale/ANDROID_ID
+# from the host app's per-clone identity file. GPS is engine-side
+# (BLocationManager, host app) and needs no engine change.
+ZEE_IDENTITY = "Bcore/src/main/java/top/niunaijun/blackbox/app/ZeeIdentity.java"
+
+
 # --- v3.1.0: per-clone proxy (ZeeProxy) --------------------------------------
 # New native module: Dobby hooks on libc connect/getaddrinfo/gethostbyname/
 # sendto/sendmsg/send inside a clone process, routing that clone's TCP
@@ -366,6 +374,15 @@ def main() -> int:
     patch_once(nb / BOXCORE, BOXCORE_WRAPPER_OLD, BOXCORE_WRAPPER_NEW, f"{BOXCORE} (enableProxy wrapper)")
     patch_once(nb / BOXCORE, BOXCORE_METHOD_OLD, BOXCORE_METHOD_NEW, f"{BOXCORE} (enableProxy in gMethods)")
     patch_once(nb / NATIVE_CORE, NATIVE_CORE_OLD, NATIVE_CORE_NEW, f"{NATIVE_CORE} (enableProxy declaration)")
+    # v3.1.1: per-clone identity (ZeeIdentity) — copy the new file into
+    # the Bcore tree; the call site is in the patched BActivityThread.
+    zee_id_src = patch_dir / "ZeeIdentity.java"
+    zee_id_dst = nb / ZEE_IDENTITY
+    assert zee_id_src.is_file(), f"missing ZeeIdentity file {zee_id_src}"
+    zee_id_dst.parent.mkdir(parents=True, exist_ok=True)
+    zee_id_dst.write_bytes(zee_id_src.read_bytes())
+    assert sha(zee_id_dst) == sha(zee_id_src), f"verify failed for {ZEE_IDENTITY}"
+    print(f"patched {ZEE_IDENTITY}")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 

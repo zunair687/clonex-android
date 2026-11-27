@@ -419,6 +419,21 @@ public class BActivityThread extends IBActivityThread.Stub {
             Slog.w(TAG, "ZeeProxy enable failed", t);
         }
 
+        // Zee Clone v3.1.1: per-clone identity — timezone/locale/ANDROID_ID
+        // from the host app's identity file (written by the Proxy dialog).
+        // Runs in the clone process only, before the cloned app's code.
+        // GPS is engine-side (BLocationManager, host app) — not here.
+        try {
+            String hostPkg2 = BlackBoxCore.getContext().getPackageName();
+            if (!packageName.equals(hostPkg2)) {
+                ZeeIdentity.apply(packageName, BActivityThread.getUserId(),
+                        BlackBoxCore.getContext().getFilesDir().getAbsolutePath(),
+                        packageContext);
+            }
+        } catch (Throwable t) {
+            Slog.w(TAG, "ZeeIdentity apply failed", t);
+        }
+
         AppBindData bindData = new AppBindData();
         bindData.appInfo = applicationInfo;
         bindData.processName = processName;

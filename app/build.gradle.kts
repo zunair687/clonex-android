@@ -66,8 +66,13 @@ android {
         // tools/zee-proxy/ + tools/patch-bcore-split.py), per-clone proxy
         // settings UI with a Test button, fail-closed UDP/IPv6 blocking.
         // v3.0.9's safe-mode / crash-guard / COMPAT behaviour is unchanged.
-        versionCode = 24
-        versionName = "3.1.0"
+        // v3.1.1 (2026-11-28): COMPLETE the proxy system — per-clone
+        // timezone/locale (ZeeIdentity, bind time), GPS via the engine's
+        // own BLocationManager (OWN_MODE), per-clone fake ANDROID_ID,
+        // proxy health monitoring + user-triggered "New IP" rotation,
+        // proxy/identity status in Device Info.
+        versionCode = 25
+        versionName = "3.1.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
