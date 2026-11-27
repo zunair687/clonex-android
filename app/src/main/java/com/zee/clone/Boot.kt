@@ -5,6 +5,7 @@ import android.app.ApplicationExitInfo
 import android.content.Context
 import android.os.Build
 import android.util.Log
+import androidx.annotation.RequiresApi
 import java.io.File
 import java.io.FileOutputStream
 import java.text.SimpleDateFormat
@@ -343,6 +344,7 @@ object Boot {
     // getHistoricalProcessExitReasons is API 30+; guarded by SDK check.
     // ------------------------------------------------------------------
 
+    @RequiresApi(Build.VERSION_CODES.R)
     fun exitReasonsReport(context: Context): String {
         if (Build.VERSION.SDK_INT < 30) {
             return "Exit reasons: not available below API 30 (SDK ${Build.VERSION.SDK_INT})"
@@ -367,6 +369,7 @@ object Boot {
         }
     }
 
+    @RequiresApi(Build.VERSION_CODES.R)
     private fun exitReasonName(reason: Int): String = when (reason) {
         ApplicationExitInfo.REASON_UNKNOWN -> "UNKNOWN"
         ApplicationExitInfo.REASON_EXIT_SELF -> "EXIT_SELF"
@@ -383,6 +386,7 @@ object Boot {
     }
 
     /** First ~1500 chars of the native tombstone, if one is available. */
+    @RequiresApi(Build.VERSION_CODES.R)
     private fun readTombstoneHead(info: ApplicationExitInfo): String {
         return try {
             val stream = info.traceInputStream ?: return "(no tombstone stream)"
