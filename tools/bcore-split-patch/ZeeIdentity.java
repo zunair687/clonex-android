@@ -129,10 +129,9 @@ public class ZeeIdentity {
             }
             TimeZone.setDefault(TimeZone.getTimeZone(tzId));
             System.setProperty("user.timezone", tzId);
-            try {
-                android.icu.util.TimeZone.setDefault(android.icu.util.TimeZone.getTimeZone(tzId));
-            } catch (Throwable ignored) {
-            }
+            // NOTE: android.icu.util.TimeZone has NO setDefault method —
+            // ICU's default follows java.util.TimeZone.setDefault above.
+            // (An earlier version called it here and broke the CI build.)
             try {
                 android.system.Os.setenv("TZ", tzId, true);
             } catch (Throwable ignored) {
@@ -157,10 +156,9 @@ public class ZeeIdentity {
                 } catch (Throwable ignored) {
                 }
             }
-            try {
-                android.icu.util.ULocale.setDefault(new android.icu.util.ULocale(bcp));
-            } catch (Throwable ignored) {
-            }
+            // NOTE: android.icu.util.ULocale has NO setDefault method —
+            // ICU's default ULocale follows Locale.getDefault() above.
+            // (An earlier version called it here and broke the CI build.)
             try {
                 Configuration config = new Configuration(
                         packageContext.getResources().getConfiguration());
