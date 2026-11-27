@@ -22,6 +22,10 @@ Usage: python3 tools/patch-bcore-split.py <path-to-newblackbox-checkout>
   adds a reflection fallback for BPackage's mSigningDetails.
 - Verifies: the 4 files are byte-identical to the patch dir, and the
   AntiDetection line is present. Exits non-zero on any failure.
+- v3.1.0: also copies tools/zee-proxy/zee_proxy.{h,cpp} into
+  Bcore/src/main/cpp/zee_proxy/, adds the .cpp to the native build
+  (Android.mk), registers the enableProxy JNI entry in BoxCore.cpp and
+  declares it in NativeCore.java.
 """
 import hashlib
 import pathlib
@@ -241,6 +245,49 @@ CONSUMER_RULES_NEW = (
 )
 
 
+# --- v3.1.0: per-clone proxy (ZeeProxy) --------------------------------------
+# New native module: Dobby hooks on libc connect/getaddrinfo/gethostbyname/
+# sendto/sendmsg/send inside a clone process, routing that clone's TCP
+# through its configured SOCKS5/HTTP proxy. Design + host tests:
+# tools/zee-proxy/zee_proxy.h. The module is Zee Clone's own code; it uses
+# the Dobby library NewBlackbox already vendors + links (Bcore Dobby/).
+ZEE_PROXY_FILES = {
+    "zee_proxy.h": "zee_proxy.h",
+    "zee_proxy.cpp": "zee_proxy.cpp",
+}
+ZEE_PROXY_DIR = "Bcore/src/main/cpp/zee_proxy"
+ANDROID_MK = "Bcore/src/main/cpp/Android.mk"
+ANDROID_MK_OLD = "JniHook/JniHook.cpp\n"
+ANDROID_MK_NEW = "JniHook/JniHook.cpp \\\n    zee_proxy/zee_proxy.cpp\n"
+BOXCORE = "Bcore/src/main/cpp/BoxCore.cpp"
+BOXCORE_INCLUDE_OLD = '#include "hidden_api.h"\n'
+BOXCORE_INCLUDE_NEW = '#include "hidden_api.h"\n#include "zee_proxy/zee_proxy.h"\n'
+BOXCORE_WRAPPER_OLD = "void addIORule(JNIEnv *env, jclass clazz, jstring target_path,\n"
+BOXCORE_WRAPPER_NEW = (
+    "// Zee Clone v3.1.0: per-clone proxy (see tools/zee-proxy/zee_proxy.h).\n"
+    "void enableProxy(JNIEnv *env, jclass clazz, jstring packageName, jint userId,\n"
+    "               jstring hostFilesDir) {\n"
+    "    ZeeProxy_Enable(env, clazz, packageName, userId, hostFilesDir);\n"
+    "}\n"
+    "\n"
+    "void addIORule(JNIEnv *env, jclass clazz, jstring target_path,\n"
+)
+BOXCORE_METHOD_OLD = '        {"init",       "(I)V",                                    (void *) init},\n'
+BOXCORE_METHOD_NEW = (
+    '        {"init",       "(I)V",                                    (void *) init},\n'
+    '        {"enableProxy", "(Ljava/lang/String;ILjava/lang/String;)V", (void *) enableProxy},\n'
+)
+NATIVE_CORE = "Bcore/src/main/java/top/niunaijun/blackbox/core/NativeCore.java"
+NATIVE_CORE_OLD = "    public static native void enableIO();\n"
+NATIVE_CORE_NEW = (
+    "    public static native void enableIO();\n"
+    "\n"
+    "    // Zee Clone v3.1.0: per-clone proxy — install the socket hooks for\n"
+    "    // this clone (package + virtual userId) when a proxy is configured.\n"
+    "    public static native void enableProxy(String packageName, int userId, String hostFilesDir);\n"
+)
+
+
 def patch_once(path: pathlib.Path, old: str, new: str, label: str) -> None:
     text = path.read_text(encoding="utf-8")
     assert text.count(old) == 1, f"{label}: anchor not found exactly once in {path}"
@@ -302,6 +349,23 @@ def main() -> int:
     patch_once(nb / BPACKAGE, BP_SIGNING_OLD, BP_SIGNING_NEW, f"{BPACKAGE} (mSigningDetails reflection fallback)")
     # v3.0.6: R8 keep rules for black-reflection (see CONSUMER_RULES_* above).
     patch_once(nb / CONSUMER_RULES, CONSUMER_RULES_OLD, CONSUMER_RULES_NEW, f"{CONSUMER_RULES} (black-reflection keeps)")
+    # v3.1.0: per-clone proxy (ZeeProxy) — copy the module, wire it into
+    # the Bcore native build, register the JNI entry, declare it in Java.
+    zee_src_dir = here / "zee-proxy"
+    zee_dst_dir = nb / ZEE_PROXY_DIR
+    zee_dst_dir.mkdir(parents=True, exist_ok=True)
+    for name in ZEE_PROXY_FILES:
+        src = zee_src_dir / name
+        dst = zee_dst_dir / name
+        assert src.is_file(), f"missing ZeeProxy file {src}"
+        dst.write_bytes(src.read_bytes())
+        assert sha(dst) == sha(src), f"verify failed for {ZEE_PROXY_DIR}/{name}"
+        print(f"patched {ZEE_PROXY_DIR}/{name}")
+    patch_once(nb / ANDROID_MK, ANDROID_MK_OLD, ANDROID_MK_NEW, f"{ANDROID_MK} (zee_proxy.cpp in build)")
+    patch_once(nb / BOXCORE, BOXCORE_INCLUDE_OLD, BOXCORE_INCLUDE_NEW, f"{BOXCORE} (zee_proxy include)")
+    patch_once(nb / BOXCORE, BOXCORE_WRAPPER_OLD, BOXCORE_WRAPPER_NEW, f"{BOXCORE} (enableProxy wrapper)")
+    patch_once(nb / BOXCORE, BOXCORE_METHOD_OLD, BOXCORE_METHOD_NEW, f"{BOXCORE} (enableProxy in gMethods)")
+    patch_once(nb / NATIVE_CORE, NATIVE_CORE_OLD, NATIVE_CORE_NEW, f"{NATIVE_CORE} (enableProxy declaration)")
     print("SPLIT PATCH APPLIED + VERIFIED")
     return 0
 

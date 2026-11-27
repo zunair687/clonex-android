@@ -90,10 +90,12 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.zee.clone.data.CloneDao
 import com.zee.clone.data.CloneDatabase
 import com.zee.clone.data.CloneEntry
+import com.zee.clone.data.ProxySettings
 import com.zee.clone.data.SettingsStore
 import com.zee.clone.engine.EngineResult
 import com.zee.clone.engine.RealVirtualEngine
 import com.zee.clone.engine.VirtualEngine
+import com.zee.clone.ui.ProxyDialog
 import com.zee.clone.ui.ZeeCloneTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -862,6 +864,8 @@ private fun ZeeCloneApp(
     var screen by remember { mutableStateOf(Screen.HOME) }
     var status by remember { mutableStateOf<String?>(null) }
     var cloneOptions by remember { mutableStateOf<CloneEntry?>(null) }
+    // v3.1.0: per-clone proxy dialog target.
+    var proxyEntry by remember { mutableStateOf<CloneEntry?>(null) }
     var showSettings by remember { mutableStateOf(false) }
     var showLicenses by remember { mutableStateOf(false) }
     var showDeviceInfo by remember { mutableStateOf(false) }
@@ -1068,6 +1072,13 @@ private fun ZeeCloneApp(
     // --- dialogs ------------------------------------------------------------
 
     cloneOptions?.let { entry ->
+        // v3.1.0: show the configured proxy country on the button, if any.
+        val proxyLabel = remember(entry) {
+            ProxySettings.read(activity, entry.packageName, entry.userId)
+                ?.takeIf { it.enabled }
+                ?.let { "Proxy… (${it.country.ifBlank { it.type }})" }
+                ?: "Proxy…"
+        }
         AlertDialog(
             onDismissRequest = { cloneOptions = null },
             title = { Text(entry.label) },
@@ -1080,6 +1091,10 @@ private fun ZeeCloneApp(
                     CloneOptionButton("Add another clone") {
                         cloneOptions = null
                         onAddAnotherClone(entry)
+                    }
+                    CloneOptionButton(proxyLabel) {
+                        cloneOptions = null
+                        proxyEntry = entry
                     }
                     CloneOptionButton("Clear data") {
                         cloneOptions = null
@@ -1106,6 +1121,17 @@ private fun ZeeCloneApp(
             confirmButton = {
                 TextButton(onClick = { cloneOptions = null }) { Text("Cancel") }
             }
+        )
+    }
+
+    // v3.1.0: per-clone proxy dialog.
+    proxyEntry?.let { entry ->
+        ProxyDialog(
+            entry = entry,
+            activity = activity,
+            engine = engine,
+            onStatus = { status = it },
+            onDismiss = { proxyEntry = null }
         )
     }
 
@@ -1186,7 +1212,7 @@ private fun ZeeCloneApp(
             title = { Text("Open source licenses") },
             text = {
                 Text(
-                    "Zee Clone v3.0 is based on CloneX v3.0 and uses the NewBlackbox virtual engine by ALEX5402 " +
+                    "Zee Clone is based on CloneX v3.0 and uses the NewBlackbox virtual engine by ALEX5402 " +
                         "(https://github.com/ALEX5402/NewBlackbox), licensed under " +
                         "the Apache License 2.0. CloneX source code is published " +
                         "at https://github.com/XyronixDev/clonex-android. The " +

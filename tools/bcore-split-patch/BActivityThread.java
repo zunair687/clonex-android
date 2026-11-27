@@ -403,6 +403,22 @@ public class BActivityThread extends IBActivityThread.Stub {
         assert packageContext != null;
         IOCore.get().enableRedirect(packageContext);
 
+        // Zee Clone v3.1.0: per-clone proxy — install the socket hooks for
+        // this clone (package + virtual userId) when a proxy is configured
+        // for it. The host app itself never gets a proxy, and a clone
+        // without a config file gets no hooks at all (native side no-ops).
+        // Runs after enableRedirect so the config file is read before any
+        // network call the cloned app can make.
+        try {
+            String hostPkg = BlackBoxCore.getContext().getPackageName();
+            if (!packageName.equals(hostPkg)) {
+                NativeCore.enableProxy(packageName, BActivityThread.getUserId(),
+                        BlackBoxCore.getContext().getFilesDir().getAbsolutePath());
+            }
+        } catch (Throwable t) {
+            Slog.w(TAG, "ZeeProxy enable failed", t);
+        }
+
         AppBindData bindData = new AppBindData();
         bindData.appInfo = applicationInfo;
         bindData.processName = processName;

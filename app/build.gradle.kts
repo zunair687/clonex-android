@@ -61,12 +61,13 @@ android {
         // heavy init (Room / DataStore / engine server start). v3.0.7
         // died on launch on a Samsung Note 10 Plus (Android 12) with no
         // UI at all; see ZeeCloneApplication / MainActivity.
-        // v3.0.9 (2026-11-28): full Claude fix — boot breadcrumbs,
-        // crash-loop guard (FULL → COMPAT → OFF), engine profiles,
-        // safe-mode UI with Retry/Copy report/Clear data, report screen
-        // with exit reasons. See Boot.kt and the v3.0.9 build note.
-        versionCode = 23
-        versionName = "3.0.9"
+        // v3.1.0 (2026-11-28): per-clone proxy — engine-level SOCKS5/HTTP
+        // proxy per clone (Dobby hooks in the Bcore native module, see
+        // tools/zee-proxy/ + tools/patch-bcore-split.py), per-clone proxy
+        // settings UI with a Test button, fail-closed UDP/IPv6 blocking.
+        // v3.0.9's safe-mode / crash-guard / COMPAT behaviour is unchanged.
+        versionCode = 24
+        versionName = "3.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
