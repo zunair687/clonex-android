@@ -16,3 +16,7 @@ captures/
 *.jks
 *.keystore
 local.properties
+
+# ZeeProxy host-test artifacts (regenerated on every test run).
+tools/zee-proxy/*.log
+tools/__pycache__/
