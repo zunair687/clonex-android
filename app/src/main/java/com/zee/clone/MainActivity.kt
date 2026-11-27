@@ -12,6 +12,7 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.widget.Toast
 import android.provider.DocumentsContract
 import androidx.activity.ComponentActivity
@@ -51,6 +52,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.FloatingActionButton
@@ -125,28 +127,93 @@ import java.util.concurrent.ConcurrentHashMap
  * launch is a single boolean and it handles split APKs (Instagram etc.)
  * via the MaxCloner patch applied to Bcore in CI. No assist package:
  * NewBlackbox runs clones in the host's own :pN stub processes.
+ *
+ * v3.0.8 safe-mode startup: this activity used to build Room, DataStore
+ * and the engine BEFORE setContent, so on the Samsung Note 10 Plus
+ * (Android 12) v3.0.7 died at launch with no UI at all. Now setContent
+ * shows a loading screen on the first frame; the heavy init runs on a
+ * background thread right after (see [runDeferredInit]), each step
+ * guarded — a failure shows an on-screen error instead of killing the
+ * app. The engine server start itself is deferred the same way (see
+ * ZeeCloneApplication.startEngineServer).
  */
 class MainActivity : ComponentActivity() {
 
+    /** v3.0.8 safe-mode startup states. */
+    private sealed interface StartupState {
+        data object Loading : StartupState
+        data class Ready(
+            val dao: CloneDao,
+            val settings: SettingsStore,
+            val engine: VirtualEngine
+        ) : StartupState
+        data class Failed(val message: String) : StartupState
+    }
+
+    private var startupState by mutableStateOf<StartupState>(StartupState.Loading)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val db = CloneDatabase.get(this)
-        val dao = db.cloneDao()
-        val settings = SettingsStore(this)
-        // Real engine (v2.0). The old stub (StubVirtualEngine.kt) stays in
-        // the codebase, unused, as a reference implementation.
-        val engine: VirtualEngine = RealVirtualEngine(this, dao)
-
         setContent {
             ZeeCloneTheme {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    ZeeCloneApp(dao = dao, settings = settings, engine = engine, activity = this)
+                    when (val state = startupState) {
+                        StartupState.Loading -> {
+                            StartupLoadingScreen()
+                            // Runs after the first frame: the loading
+                            // screen is already on screen when the heavy
+                            // init below starts.
+                            LaunchedEffect(Unit) {
+                                startupState = runDeferredInit()
+                            }
+                        }
+                        is StartupState.Ready -> ZeeCloneApp(
+                            dao = state.dao,
+                            settings = state.settings,
+                            engine = state.engine,
+                            activity = this
+                        )
+                        is StartupState.Failed -> StartupErrorScreen(
+                            message = state.message,
+                            onRetry = { startupState = StartupState.Loading }
+                        )
+                    }
                 }
             }
         }
+    }
+
+    /**
+     * v3.0.8 safe-mode: the heavy startup work, off the main thread.
+     * Room open, DataStore, engine server start and the engine wrapper
+     * are each inside the one try/catch — a failure returns [Failed]
+     * with a readable message instead of crashing before any UI.
+     * (The engine server start itself can still throw inside native
+     * code in ways Java cannot catch — see the v3.0.8 build note.)
+     */
+    private suspend fun runDeferredInit(): StartupState = withContext(Dispatchers.Default) {
+        try {
+            val db = CloneDatabase.get(applicationContext)
+            val dao = db.cloneDao()
+            val settings = SettingsStore(applicationContext)
+            // Engine server start, deferred from Application.onCreate.
+            (application as ZeeCloneApplication).startEngineServer()
+            val engine: VirtualEngine = RealVirtualEngine(applicationContext, dao)
+            StartupState.Ready(dao, settings, engine)
+        } catch (t: Throwable) {
+            Log.e("MainActivity", "startup init failed", t)
+            StartupState.Failed(startupFailureMessage(t))
+        }
+    }
+
+    private fun startupFailureMessage(t: Throwable): String {
+        val detail = t.message?.takeIf { it.isNotBlank() } ?: t.javaClass.simpleName
+        return "Zee Clone could not start ($detail). Your clones are not " +
+            "deleted. Try again — or clear the app's storage in Android " +
+            "Settings if this keeps happening."
     }
 
     // ------------------------------------------------------------------
@@ -418,7 +485,7 @@ class MainActivity : ComponentActivity() {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.6 (targetSdk 28, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.8 (targetSdk 35, sideload-only)")
             sb.appendLine(
                 "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )
@@ -587,6 +654,44 @@ private fun Drawable.toImageBitmap(): ImageBitmap {
 }
 
 // ---------------------------------------------------------------------------
+// v3.0.8 safe-mode startup screens
+// ---------------------------------------------------------------------------
+
+@Composable
+private fun StartupLoadingScreen() {
+    Column(
+        modifier = Modifier.fillMaxSize(),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        CircularProgressIndicator()
+        Spacer(modifier = Modifier.height(16.dp))
+        Text("Starting Zee Clone…", fontSize = 16.sp)
+    }
+}
+
+@Composable
+private fun StartupErrorScreen(message: String, onRetry: () -> Unit) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(24.dp),
+        verticalArrangement = Arrangement.Center,
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Text(
+            "Zee Clone could not start",
+            fontWeight = FontWeight.Bold,
+            fontSize = 18.sp,
+            textAlign = TextAlign.Center
+        )
+        Spacer(modifier = Modifier.height(12.dp))
+        Text(message, textAlign = TextAlign.Center)
+        Spacer(modifier = Modifier.height(20.dp))
+        Button(onClick = onRetry) { Text("Try again") }
+    }
+}
+
 // Root UI — screen state machine
 // ---------------------------------------------------------------------------
 

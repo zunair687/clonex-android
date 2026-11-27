@@ -57,8 +57,12 @@ android {
         // any Play listing. If the engine breaks at 35, the fallback is
         // sideload-only at 28.
         targetSdk = 35
-        versionCode = 21
-        versionName = "3.0.7"
+        // v3.0.8 (2026-11-27): safe-mode startup — UI shows before any
+        // heavy init (Room / DataStore / engine server start). v3.0.7
+        // died on launch on a Samsung Note 10 Plus (Android 12) with no
+        // UI at all; see ZeeCloneApplication / MainActivity.
+        versionCode = 22
+        versionName = "3.0.8"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

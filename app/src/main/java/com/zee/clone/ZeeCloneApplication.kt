@@ -38,8 +38,23 @@ import java.util.Locale
  *  - A global uncaught-exception handler writes the last crash to
  *    filesDir/crash-last.txt so a crash is diagnosable without logcat
  *    (Device Info shows it).
+ *
+ * v3.0.8 safe-mode startup: in the MAIN process, [startEngineServer]
+ * (BlackBoxCore.doCreate()) no longer runs in [onCreate]. The main
+ * process shows MainActivity's loading screen first; MainActivity's
+ * deferred init calls [startEngineServer] after the first frame.
+ * Non-main processes (:black server, :pN clone stubs) never show
+ * MainActivity, so they still start the engine in [onCreate] exactly
+ * as before — doCreate() installs their system hooks and brings up
+ * the :black daemon, and skipping it there would break clones.
+ * (Upstream BlackBox's own app does the same: a loader screen starts
+ * the engine after UI. See NewBlackbox CLAUDE.md "Startup sequence".)
  */
 class ZeeCloneApplication : Application() {
+
+    /** Guard for [startEngineServer]: the engine server starts once. */
+    @Volatile
+    private var engineServerStarted = false
 
     override fun attachBaseContext(base: Context) {
         super.attachBaseContext(base)
@@ -67,6 +82,32 @@ class ZeeCloneApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Crash handler FIRST: anything that fails after this point is
+        // recorded to filesDir/crash-last.txt for Device Info.
+        installCrashHandler()
+        if (isMainProcess()) {
+            // v3.0.8 safe-mode: the engine server start is deferred
+            // until MainActivity has shown its first frame.
+            // MainActivity calls startEngineServer() from its deferred
+            // init. (v3.0.7 died on a Samsung Note 10 Plus right here,
+            // before any UI existed.)
+            Log.i(TAG, "main process: engine server start deferred to MainActivity")
+        } else {
+            // :black server and :pN clone stubs never show MainActivity,
+            // so they start the engine here exactly as before.
+            startEngineServer()
+        }
+    }
+
+    /**
+     * Start the engine server (BlackBoxCore.doCreate()). Idempotent.
+     * Called from MainActivity's deferred init in the main process
+     * (after the first frame), and from [onCreate] in every other
+     * process. Any Java failure is recorded and the app runs degraded.
+     */
+    fun startEngineServer() {
+        if (engineServerStarted) return
+        engineServerStarted = true
         try {
             BlackBoxCore.get().doCreate()
         } catch (e: Throwable) {
@@ -76,7 +117,26 @@ class ZeeCloneApplication : Application() {
         if (engineInitError == null) {
             engineInitOk = true
         }
-        installCrashHandler()
+    }
+
+    /**
+     * True only when this process is positively identified as the main
+     * process (process name == package name). Unknown (null) counts as
+     * NOT main, so an unidentifiable process keeps today's behaviour
+     * (engine starts in onCreate) instead of silently never starting.
+     */
+    private fun isMainProcess(): Boolean {
+        val processName: String? = try {
+            if (Build.VERSION.SDK_INT >= 28) Application.getProcessName() else null
+        } catch (e: Exception) {
+            null
+        } ?: try {
+            val am = getSystemService(Context.ACTIVITY_SERVICE) as android.app.ActivityManager
+            am.runningAppProcesses?.firstOrNull { it.pid == android.os.Process.myPid() }?.processName
+        } catch (e: Exception) {
+            null
+        }
+        return processName == packageName
     }
 
     /**
@@ -102,7 +162,7 @@ class ZeeCloneApplication : Application() {
                 .append("Android ${Build.VERSION.RELEASE} ")
                 .append("(SDK ${Build.VERSION.SDK_INT}) ")
                 .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                .append("Zee Clone 3.0.6\n")
+                .append("Zee Clone 3.0.8\n")
                 .append("Exception: ${e.javaClass.name}: ${e.message}\n")
                 .append(Log.getStackTraceString(e))
                 .toString()
@@ -126,7 +186,7 @@ class ZeeCloneApplication : Application() {
                         .append("Android ${Build.VERSION.RELEASE} ")
                         .append("(SDK ${Build.VERSION.SDK_INT}) ")
                         .append("${Build.MANUFACTURER} ${Build.MODEL}\n")
-                        .append("Zee Clone 3.0.6\n")
+                        .append("Zee Clone 3.0.8\n")
                         .append(Log.getStackTraceString(throwable))
                         .toString()
                     File(filesDir, CRASH_FILE).writeText(text)
