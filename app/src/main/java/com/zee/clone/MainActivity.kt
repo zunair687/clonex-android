@@ -97,10 +97,12 @@ import com.zee.clone.engine.VirtualEngine
 import com.zee.clone.ui.ZeeCloneTheme
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import java.util.concurrent.ConcurrentHashMap
 
 /**
@@ -128,26 +130,30 @@ import java.util.concurrent.ConcurrentHashMap
  * via the MaxCloner patch applied to Bcore in CI. No assist package:
  * NewBlackbox runs clones in the host's own :pN stub processes.
  *
- * v3.0.8 safe-mode startup: this activity used to build Room, DataStore
- * and the engine BEFORE setContent, so on the Samsung Note 10 Plus
- * (Android 12) v3.0.7 died at launch with no UI at all. Now setContent
- * shows a loading screen on the first frame; the heavy init runs on a
- * background thread right after (see [runDeferredInit]), each step
- * guarded — a failure shows an on-screen error instead of killing the
- * app. The engine server start itself is deferred the same way (see
- * ZeeCloneApplication.startEngineServer).
+ * v3.0.9 (Claude diagnosis, chat b2300a15): breadcrumbs at every
+ * startup step, a crash-loop guard (Boot), engine profiles
+ * FULL → COMPAT → OFF, a safe-mode error screen with Retry (compat) /
+ * Copy report / Clear engine data, and a report screen (Device Info)
+ * with exit reasons + full device details. See Boot.kt.
  */
 class MainActivity : ComponentActivity() {
 
-    /** v3.0.8 safe-mode startup states. */
+    /** v3.0.8 safe-mode startup states (v3.0.9: Failed/Ready carry
+     *  the engine-disabled reason + the full startup report). */
     private sealed interface StartupState {
         data object Loading : StartupState
         data class Ready(
             val dao: CloneDao,
             val settings: SettingsStore,
-            val engine: VirtualEngine
+            val engine: VirtualEngine,
+            /** Non-null when the engine is disabled/failed (home banner). */
+            val engineDisabledReason: String?
         ) : StartupState
-        data class Failed(val message: String) : StartupState
+        data class Failed(
+            val message: String,
+            val engineDisabledReason: String?,
+            val report: String
+        ) : StartupState
     }
 
     private var startupState by mutableStateOf<StartupState>(StartupState.Loading)
@@ -165,8 +171,13 @@ class MainActivity : ComponentActivity() {
                             StartupLoadingScreen()
                             // Runs after the first frame: the loading
                             // screen is already on screen when the heavy
-                            // init below starts.
+                            // init below starts. The F1 breadcrumb proves
+                            // the process survived attachBaseContext.
                             LaunchedEffect(Unit) {
+                                Boot.mark(
+                                    applicationContext.filesDir,
+                                    "F1 first frame"
+                                )
                                 startupState = runDeferredInit()
                             }
                         }
@@ -174,11 +185,16 @@ class MainActivity : ComponentActivity() {
                             dao = state.dao,
                             settings = state.settings,
                             engine = state.engine,
+                            engineBanner = state.engineDisabledReason,
                             activity = this
                         )
                         is StartupState.Failed -> StartupErrorScreen(
                             message = state.message,
-                            onRetry = { startupState = StartupState.Loading }
+                            engineDisabledReason = state.engineDisabledReason,
+                            report = state.report,
+                            onRetry = { startupState = StartupState.Loading },
+                            onRetryCompat = { retryWithCompat() },
+                            onClearEngineData = { clearEngineDataAndRestart() }
                         )
                     }
                 }
@@ -193,20 +209,92 @@ class MainActivity : ComponentActivity() {
      * with a readable message instead of crashing before any UI.
      * (The engine server start itself can still throw inside native
      * code in ways Java cannot catch — see the v3.0.8 build note.)
+     *
+     * v3.0.9: every step writes a breadcrumb (M1/M2/M3) so the last
+     * marker shows where a death happened; a DataStore corruption is
+     * repaired by deleting the prefs file once; success marks the boot
+     * OK (crash-loop guard), failure marks it FAILED and carries the
+     * full startup report for the safe-mode screen.
      */
     private suspend fun runDeferredInit(): StartupState = withContext(Dispatchers.Default) {
+        val filesDir = applicationContext.filesDir
         try {
+            Boot.mark(filesDir, "M1 Room start")
             val db = CloneDatabase.get(applicationContext)
             val dao = db.cloneDao()
-            val settings = SettingsStore(applicationContext)
+            Boot.mark(filesDir, "M1 Room done")
+            Boot.mark(filesDir, "M2 DataStore start")
+            val settings = loadSettingsWithRepair()
+            Boot.mark(filesDir, "M2 DataStore done")
+            Boot.mark(filesDir, "M3 engine start")
             // Engine server start, deferred from Application.onCreate.
             (application as ZeeCloneApplication).startEngineServer()
             val engine: VirtualEngine = RealVirtualEngine(applicationContext, dao)
-            StartupState.Ready(dao, settings, engine)
+            Boot.mark(filesDir, "M3 engine done")
+            Boot.markOk(filesDir)
+            val reason = ZeeCloneApplication.engineDisabledReason()
+            StartupState.Ready(dao, settings, engine, reason)
         } catch (t: Throwable) {
             Log.e("MainActivity", "startup init failed", t)
-            StartupState.Failed(startupFailureMessage(t))
+            Boot.mark(filesDir, "M-init FAILED: ${t.javaClass.simpleName}: ${t.message}")
+            Boot.markFailed(filesDir, "${t.javaClass.simpleName}: ${t.message ?: ""}")
+            val reason = ZeeCloneApplication.engineDisabledReason()
+            StartupState.Failed(startupFailureMessage(t), reason, loadDeviceInfo())
         }
+    }
+
+    /**
+     * v3.0.9: DataStore corruption handler. A corrupt preferences file
+     * (torn write, bad update) throws IOException on first read — the
+     * app used to die on it. Delete the prefs file once and rebuild
+     * the store; settings are non-critical (max clones defaults to 10).
+     */
+    private suspend fun loadSettingsWithRepair(): SettingsStore {
+        val store = SettingsStore(applicationContext)
+        return try {
+            // Force the first read: construction alone is lazy.
+            store.maxClones.first()
+            store
+        } catch (e: IOException) {
+            Log.w("MainActivity", "DataStore corrupt, resetting settings", e)
+            try {
+                val prefsDir = File(applicationContext.filesDir, "datastore")
+                File(prefsDir, "zee_clone_settings.preferences_pb").delete()
+                File(prefsDir, "zee_clone_settings.preferences_pb.bak").delete()
+            } catch (ignored: Exception) {
+            }
+            SettingsStore(applicationContext)
+        }
+    }
+
+    /** "Retry (compat)": force the COMPAT profile next launch, restart. */
+    private fun retryWithCompat() {
+        try {
+            Boot.setProfile(applicationContext.filesDir, Boot.EngineProfile.COMPAT)
+        } catch (ignored: Exception) {
+        }
+        restartApp()
+    }
+
+    /** "Clear engine data": reset boot diagnostics + guard, restart. */
+    private fun clearEngineDataAndRestart() {
+        try {
+            Boot.resetAll(applicationContext.filesDir)
+        } catch (ignored: Exception) {
+        }
+        restartApp()
+    }
+
+    /** Restart the app process via its launcher intent. */
+    private fun restartApp() {
+        try {
+            val intent = packageManager.getLaunchIntentForPackage(packageName)?.apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK)
+            }
+            if (intent != null) startActivity(intent)
+        } catch (ignored: Exception) {
+        }
+        android.os.Process.killProcess(android.os.Process.myPid())
     }
 
     private fun startupFailureMessage(t: Throwable): String {
@@ -480,12 +568,25 @@ class MainActivity : ComponentActivity() {
             }
         }
 
-    internal suspend fun loadDeviceInfo(engine: VirtualEngine): String =
+    /**
+     * v3.0.9 report screen: Device Info now carries the full startup
+     * report — engine profile + boot state, breadcrumbs, last exit
+     * reasons (CRASH vs CRASH_NATIVE + signal + tombstone head) and
+     * full device details — so a phone-only user can copy-paste the
+     * exact cause without logcat. The dialog's Copy button copies all
+     * of it.
+     */
+    internal suspend fun loadDeviceInfo(): String =
         withContext(Dispatchers.IO) {
             val sb = StringBuilder()
             sb.appendLine("Device: ${Build.MANUFACTURER} ${Build.MODEL}")
             sb.appendLine("Android: ${Build.VERSION.RELEASE} (SDK ${Build.VERSION.SDK_INT})")
-            sb.appendLine("Zee Clone: 3.0.8 (targetSdk 35, sideload-only)")
+            sb.appendLine("Zee Clone: 3.0.9 (targetSdk 35, sideload-only)")
+            val app = ZeeCloneApplication.instance
+            sb.appendLine(
+                "Engine profile: ${app?.engineProfile ?: Boot.currentProfile(applicationContext.filesDir)}"
+            )
+            sb.appendLine("Boot state: ${ZeeCloneApplication.bootStateSummary(applicationContext)}")
             sb.appendLine(
                 "Engine: NewBlackbox (BlackBoxCore) — ${ZeeCloneApplication.engineStatus()}"
             )
@@ -503,6 +604,15 @@ class MainActivity : ComponentActivity() {
                 sb.appendLine("Last crash:")
                 sb.appendLine(lastCrash)
             }
+            sb.appendLine()
+            sb.appendLine("Breadcrumbs (last markers — the last one shows where it died):")
+            sb.appendLine(ZeeCloneApplication.readBreadcrumbs(applicationContext))
+            sb.appendLine()
+            sb.appendLine("Exit reasons:")
+            sb.appendLine(Boot.exitReasonsReport(applicationContext))
+            sb.appendLine()
+            sb.appendLine("Device details:")
+            sb.appendLine(Boot.deviceReport())
             sb.toString().trim()
         }
 
@@ -671,7 +781,19 @@ private fun StartupLoadingScreen() {
 }
 
 @Composable
-private fun StartupErrorScreen(message: String, onRetry: () -> Unit) {
+private fun StartupErrorScreen(
+    message: String,
+    engineDisabledReason: String?,
+    report: String,
+    onRetry: () -> Unit,
+    onRetryCompat: () -> Unit,
+    onClearEngineData: () -> Unit
+) {
+    // v3.0.9 safe-mode UI: the app always opens and says WHY the
+    // engine is disabled, with Retry (compat), Copy report and Clear
+    // engine data — instead of dying silently before any UI.
+    val clipboardManager = LocalClipboardManager.current
+    val context = LocalContext.current
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -687,8 +809,30 @@ private fun StartupErrorScreen(message: String, onRetry: () -> Unit) {
         )
         Spacer(modifier = Modifier.height(12.dp))
         Text(message, textAlign = TextAlign.Center)
+        if (engineDisabledReason != null) {
+            Spacer(modifier = Modifier.height(12.dp))
+            Text(engineDisabledReason, textAlign = TextAlign.Center)
+        }
         Spacer(modifier = Modifier.height(20.dp))
-        Button(onClick = onRetry) { Text("Try again") }
+        Button(onClick = onRetryCompat, modifier = Modifier.fillMaxWidth()) {
+            Text("Retry with COMPAT engine")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(
+            onClick = {
+                clipboardManager.setText(AnnotatedString(report))
+                Toast.makeText(context, "Report copied", Toast.LENGTH_SHORT).show()
+            },
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Copy report")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+            Text("Try again")
+        }
+        Spacer(modifier = Modifier.height(8.dp))
+        TextButton(onClick = onClearEngineData) { Text("Clear engine data") }
     }
 }
 
@@ -700,6 +844,8 @@ private fun ZeeCloneApp(
     dao: CloneDao,
     settings: SettingsStore,
     engine: VirtualEngine,
+    /** v3.0.9: non-null when the engine is disabled/failed (home banner). */
+    engineBanner: String?,
     activity: MainActivity
 ) {
     val clones by dao.getAll().collectAsStateWithLifecycle(initialValue = emptyList())
@@ -818,7 +964,7 @@ private fun ZeeCloneApp(
 
     LaunchedEffect(showDeviceInfo) {
         if (showDeviceInfo) {
-            deviceInfoText = activity.loadDeviceInfo(engine)
+            deviceInfoText = activity.loadDeviceInfo()
         }
     }
 
@@ -885,6 +1031,8 @@ private fun ZeeCloneApp(
             clones = clones,
             status = status,
             onStatusDismiss = { status = null },
+            engineBanner = engineBanner,
+            onEngineBannerDetails = onDeviceInfo,
             onOpenImport = { screen = Screen.IMPORT },
             onInstallGoogleSuite = onInstallGoogleSuite,
             onRemoveGoogleSuite = onRemoveGoogleSuite,
@@ -1020,7 +1168,7 @@ private fun ZeeCloneApp(
                         )
                     }
                     Text(
-                        "Engine: NewBlackbox (BlackBoxCore) • targetSdk 28 • sideload-only",
+                        "Engine: NewBlackbox (BlackBoxCore) • targetSdk 35 • sideload-only",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -1099,6 +1247,9 @@ private fun ZeeCloneHomeScreen(
     clones: List<CloneEntry>,
     status: String?,
     onStatusDismiss: () -> Unit,
+    /** v3.0.9: engine-disabled reason, shown as a banner (null = engine up). */
+    engineBanner: String?,
+    onEngineBannerDetails: () -> Unit,
     onOpenImport: () -> Unit,
     onInstallGoogleSuite: () -> Unit,
     onRemoveGoogleSuite: () -> Unit,
@@ -1109,6 +1260,7 @@ private fun ZeeCloneHomeScreen(
     onCloneOptions: (CloneEntry) -> Unit
 ) {
     var showFabMenu by remember { mutableStateOf(false) }
+    var bannerDismissed by remember { mutableStateOf(false) }
 
     val visibleClones = remember(clones) { clones }
 
@@ -1180,6 +1332,30 @@ private fun ZeeCloneHomeScreen(
                             horizontalArrangement = Arrangement.End
                         ) {
                             TextButton(onClick = onStatusDismiss) { Text("Dismiss") }
+                        }
+                    }
+                }
+            }
+
+            // v3.0.9: engine-disabled banner — the UI always opens and
+            // says why the engine is off, with Details opening the full
+            // report (Device Info). Dismiss is per-screen only.
+            if (engineBanner != null && !bannerDismissed) {
+                Spacer(Modifier.height(12.dp))
+                Card(
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) {
+                    Column(modifier = Modifier.padding(12.dp)) {
+                        Text(engineBanner, style = MaterialTheme.typography.bodyMedium)
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(onClick = onEngineBannerDetails) { Text("Details") }
+                            TextButton(onClick = { bannerDismissed = true }) { Text("Dismiss") }
                         }
                     }
                 }

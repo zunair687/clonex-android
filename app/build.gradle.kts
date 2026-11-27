@@ -61,8 +61,12 @@ android {
         // heavy init (Room / DataStore / engine server start). v3.0.7
         // died on launch on a Samsung Note 10 Plus (Android 12) with no
         // UI at all; see ZeeCloneApplication / MainActivity.
-        versionCode = 22
-        versionName = "3.0.8"
+        // v3.0.9 (2026-11-28): full Claude fix — boot breadcrumbs,
+        // crash-loop guard (FULL → COMPAT → OFF), engine profiles,
+        // safe-mode UI with Retry/Copy report/Clear data, report screen
+        // with exit reasons. See Boot.kt and the v3.0.9 build note.
+        versionCode = 23
+        versionName = "3.0.9"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
@@ -113,9 +117,17 @@ android {
     // ENGINE requirement (see defaultConfig above) and Zee Clone is
     // sideload-only, never Play. Lint must not fail the release build
     // for this deliberate choice; other fatal lint issues still report.
+    //
+    // v3.0.9: NewApi is an ERROR — an API-gap crash (a NoSuchMethodError
+    // below Android 15, e.g. a Kotlin stdlib call compiled against a
+    // new SDK) is suspect #2 for the Samsung launch crash (Claude
+    // diagnosis, chat b2300a15). Run lintRelease and fix every NewApi
+    // finding in the app's own code; abortOnError stays false so the
+    // release build is not blocked by unrelated lint noise.
     lint {
         abortOnError = false
         disable += "ExpiredTargetSdkVersion"
+        error += "NewApi"
     }
 
     // NOTE (AGP 9): android.kotlinOptions {} does NOT exist under AGP 9's

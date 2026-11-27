@@ -79,15 +79,38 @@ class RealVirtualEngine(
     /** Non-null reason when the engine failed to start (degraded mode). */
     private fun engineDown(): String? = ZeeCloneApplication.engineInitError
 
+    /**
+     * v3.0.9 COMPAT lazy start: in COMPAT the engine server is not
+     * started at boot — the first real engine operation starts it.
+     * Called at the top of every op (all ops already run on
+     * Dispatchers.IO, so the doCreate Binder call is safe here).
+     * No-op in FULL (server already up) and OFF (engine skipped).
+     */
+    private fun ensureServer() {
+        try {
+            ZeeCloneApplication.instance?.ensureEngineServer()
+        } catch (e: Exception) {
+            Log.w(TAG, "lazy engine start failed", e)
+        }
+    }
+
     /** v2.0.1: the startup sync must not trust an empty list while down. */
-    override suspend fun engineReady(): Boolean =
-        ZeeCloneApplication.engineInitError == null
+    override suspend fun engineReady(): Boolean {
+        if (ZeeCloneApplication.engineInitError != null) return false
+        // v3.0.9 COMPAT: the server is not up yet (lazy start). Report
+        // not-ready so the startup reconciliation never runs listClones
+        // against a dead server — an empty list there would wipe the
+        // library. The first real engine op starts the server instead.
+        if (ZeeCloneApplication.instance?.engineServerDeferred == true) return false
+        return true
+    }
 
     // --- install ------------------------------------------------------------
 
     override suspend fun installPackageAsUser(apkPath: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 val parsed = parseApk(apkPath)
                     ?: return@withContext EngineResult.Failed("Could not read this APK file.")
@@ -109,6 +132,7 @@ class RealVirtualEngine(
     override suspend fun installFromHost(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 val label = hostLabel(packageName)
                 // The MaxCloner split patch (applied to Bcore in CI) makes
@@ -132,6 +156,7 @@ class RealVirtualEngine(
     override suspend fun installApkFiles(apkPathOrDir: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 val file = File(apkPathOrDir)
                 val parsed = when {
@@ -185,6 +210,7 @@ class RealVirtualEngine(
     override suspend fun launchApp(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 // One call, one boolean — no int codes, no 3-shot
                 // sequence. The opensdk's undocumented 102 cannot occur
@@ -204,6 +230,7 @@ class RealVirtualEngine(
     override suspend fun uninstallPackage(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 BlackBoxCore.get().uninstallPackageAsUser(packageName, userId)
                 if (!BlackBoxCore.get().isInstalled(packageName, userId)) {
@@ -222,6 +249,7 @@ class RealVirtualEngine(
     override suspend fun clearCloneData(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 BlackBoxCore.get().clearPackage(packageName, userId)
                 EngineResult.Ok("Clone data cleared.")
@@ -234,6 +262,7 @@ class RealVirtualEngine(
     override suspend fun clearCloneCache(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 // NewBlackbox has no cache-only API; delete the clone's
                 // data/cache dir contents directly (same path the engine
@@ -250,6 +279,7 @@ class RealVirtualEngine(
     override suspend fun killClone(packageName: String, userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 BlackBoxCore.get().stopPackage(packageName, userId)
                 EngineResult.Ok("Clone stopped.")
@@ -264,6 +294,7 @@ class RealVirtualEngine(
     override suspend fun availableUser(packageName: String): Int =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext 0 }
                 // First userId (0..9) where this package is not installed.
                 // NewBlackbox auto-creates the user on install.
@@ -282,6 +313,7 @@ class RealVirtualEngine(
     override suspend fun listClones(): List<CloneEntry> =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext emptyList() }
                 val entries = mutableListOf<CloneEntry>()
                 for (userId in 0..9) {
@@ -313,6 +345,7 @@ class RealVirtualEngine(
     override suspend fun isGmsInstalled(userId: Int): Boolean =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext false }
                 BlackBoxCore.get().isInstallGms(userId)
             } catch (e: Exception) {
@@ -324,6 +357,7 @@ class RealVirtualEngine(
     override suspend fun installGms(userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 val result = BlackBoxCore.get().installGms(userId)
                 if (result.success) {
@@ -340,6 +374,7 @@ class RealVirtualEngine(
     override suspend fun uninstallGms(userId: Int): EngineResult =
         withContext(Dispatchers.IO) {
             try {
+                ensureServer()
                 engineDown()?.let { return@withContext EngineResult.Failed("Virtual engine failed to start: $it") }
                 if (BlackBoxCore.get().uninstallGms(userId)) {
                     EngineResult.Ok("Google services removed.")
